@@ -1,65 +1,221 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+
+type Ponto = {
+    id: number;
+    data: string;
+    entrada?: string;
+    almoco_saida?: string;
+    almoco_retorno?: string;
+    saida_final?: string;
+};
+
+export default function PontoEletronico() {
+    const [username, setUsername] = useState('Carregando...');
+    const [historicoMes, setHistoricoMes] = useState<Ponto[]>([]);
+    const [pontoHoje, setPontoHoje] = useState<Ponto | null>(null);
+    const [proximoPonto, setProximoPonto] = useState('Entrada');
+    const [loading, setLoading] = useState(true);
+
+    // 1. Inicializa: Tauri -> Nome -> Fetch API
+    useEffect(() => {
+        async function loadData() {
+            try {
+                let name = 'Dev.Local';
+                try { // Roda o comando nativo Rust se existir
+                    // @ts-ignore - Ignore the missing typings if not fully typed
+                    name = await invoke<string>('get_windows_user');
+                } catch (e) {
+                    console.log('Tauri não detectado, rodando fallback API do Next.js');
+                    const userRes = await fetch('/api/user');
+                    if (userRes.ok) {
+                        const userData = await userRes.json();
+                        name = userData.username;
+                    }
+                }
+
+                setUsername(name);
+                const res = await fetch(`/api/ponto?username=${encodeURIComponent(name)}`);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    setHistoricoMes(data.historico);
+                    setPontoHoje(data.hoje);
+                    setProximoPonto(data.next);
+                }
+            } finally { setLoading(false); }
+        }
+        loadData();
+    }, []);
+
+    // 2. Acionar Registro
+    const registrar = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/ponto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setPontoHoje(data.ponto);
+                setProximoPonto(data.next);
+
+                setHistoricoMes(prev => {
+                    const existsInfo = prev.find(p => p.id === data.ponto.id);
+                    return existsInfo ? prev.map(p => p.id === data.ponto.id ? data.ponto : p) : [data.ponto, ...prev];
+                });
+            }
+        } finally { setLoading(false); }
+    };
+
+    // 3. Cálculo de horas úteis (Carga 8h diária)
+    const calcularSaldo = () => {
+        let horasDia = 0;
+
+        historicoMes.forEach(p => {
+            if (!p.entrada) return;
+            const tIn = new Date(p.entrada).getTime();
+            let tempoUtil = 0;
+
+            if (p.almoco_saida) { // Fez primeira perna (Entrada->Almoço)
+                tempoUtil += new Date(p.almoco_saida).getTime() - tIn;
+                if (p.almoco_retorno) { // Fez segunda perna (Retorno->Saída)
+                    const tRetorno = new Date(p.almoco_retorno).getTime();
+                    const tOut = p.saida_final ? new Date(p.saida_final).getTime() : new Date().getTime();
+                    tempoUtil += tOut - tRetorno;
+                }
+            } else { // Não saiu pro almoço ainda (Entrada -> Agora)
+                const tOut = p.saida_final ? new Date(p.saida_final).getTime() : new Date().getTime();
+                tempoUtil += tOut - tIn;
+            }
+            horasDia += tempoUtil / 3600000;
+        });
+
+        // Se a pessoa estiver trabalhando hoje e a contagem for dinâmica:
+        const todayStr = new Date().toISOString().split('T')[0];
+        const hojeTemPonto = historicoMes.some(p => new Date(p.data).toISOString().split('T')[0] === todayStr);
+        const diasTrabalhados = historicoMes.length;
+        const esperado = diasTrabalhados * 8;
+        return { horasDia, esperado, saldo: horasDia - esperado };
+    };
+
+    const { horasDia, esperado, saldo } = calcularSaldo();
+    const formatTime = (iso?: string) => iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+
+    // Configuração visual do botão Redondo
+    let btnCor = 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30';
+    if (proximoPonto === 'Entrada') btnCor = 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/40';
+    else if (proximoPonto.includes('Almoço')) btnCor = 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/40';
+    else if (proximoPonto === 'Saída Final') btnCor = 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/40';
+
+    const isOk = saldo >= 0;
+    const saldoCorCmp = isOk ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700';
+
+    const formatDate = (date: Date) => {
+        return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    // Calculate specifically today's worked hours to show below the history
+    const calcularHorasHoje = () => {
+        if (!pontoHoje || !pontoHoje.entrada) return 0;
+
+        const tIn = new Date(pontoHoje.entrada).getTime();
+        let tempoUtil = 0;
+
+        if (pontoHoje.almoco_saida) {
+            tempoUtil += new Date(pontoHoje.almoco_saida).getTime() - tIn;
+            if (pontoHoje.almoco_retorno) {
+                const tRetorno = new Date(pontoHoje.almoco_retorno).getTime();
+                const tOut = pontoHoje.saida_final ? new Date(pontoHoje.saida_final).getTime() : new Date().getTime();
+                tempoUtil += tOut - tRetorno;
+            }
+        } else {
+            const tOut = pontoHoje.saida_final ? new Date(pontoHoje.saida_final).getTime() : new Date().getTime();
+            tempoUtil += tOut - tIn;
+        }
+
+        return tempoUtil / 3600000;
+    };
+    const horasHoje = calcularHorasHoje();
+
+    return (
+        <div className="min-h-screen bg-neutral-100 flex items-center justify-center p-6 font-sans">
+            <div className="max-w-5xl w-full flex flex-col md:flex-row gap-6">
+
+                {/* Principal - Botão */}
+                <div className="flex-1 bg-white rounded-3xl p-10 shadow-sm border border-neutral-200 flex flex-col items-center justify-center gap-12">
+                    <div className="text-center">
+                        <h1 className="text-2xl font-semibold text-neutral-800 tracking-tight">
+                            Registrando ponto para o dia: {formatDate(new Date())}
+                        </h1>
+                        <p className="text-sm text-neutral-500 mt-2">Logado como: <strong className="text-neutral-800">{username}</strong></p>
+                    </div>
+
+                    <button
+                        disabled={proximoPonto === 'Turno Concluído' || loading}
+                        onClick={registrar}
+                        className={`w-64 h-64 rounded-full flex items-center justify-center text-white transition-all transform hover:scale-105 active:scale-95 shadow-xl ${proximoPonto === 'Turno Concluído' ? 'bg-neutral-300 pointer-events-none' : btnCor}`}
+                    >
+                        <div className="absolute inset-2 border-4 border-white/20 rounded-full pointer-events-none"></div>
+                        <span className="text-3xl font-bold tracking-tight px-4 leading-tight whitespace-pre-line text-center">
+                            {loading ? 'Aguarde...' : `Registrar\n${proximoPonto}`}
+                        </span>
+                    </button>
+                </div>
+
+                {/* Dashboard Direito */}
+                <div className="w-full md:w-96 flex flex-col gap-6">
+
+                    {/* Card Histórico Diário */}
+                    <div className="bg-white rounded-3xl p-8 shadow-sm border border-neutral-200">
+                        <h3 className="text-lg font-semibold text-neutral-800 mb-6 flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                            Histórico de Hoje
+                        </h3>
+                        <div className="space-y-4">
+                            <LogItem label="Entrada" time={formatTime(pontoHoje?.entrada)} active={!!pontoHoje?.entrada} />
+                            <LogItem label="Saída Almoço" time={formatTime(pontoHoje?.almoco_saida)} active={!!pontoHoje?.almoco_saida} />
+                            <LogItem label="Retorno Almoço" time={formatTime(pontoHoje?.almoco_retorno)} active={!!pontoHoje?.almoco_retorno} />
+                            <LogItem label="Saída Final" time={formatTime(pontoHoje?.saida_final)} active={!!pontoHoje?.saida_final} />
+                        </div>
+                        {pontoHoje && (
+                            <div className="mt-6 pt-6 border-t border-neutral-100 flex justify-between items-center text-neutral-800">
+                                <span className="text-sm font-semibold">Total Trabalhado no Dia</span>
+                                <span className="font-mono font-bold text-lg text-emerald-600">{horasHoje.toFixed(2)}h</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Ações Gerenciais */}
+                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-neutral-200 flex flex-col gap-3">
+                        <button className="w-full py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium rounded-xl transition-colors shrink-0">
+                            Ver Resumo Mensal
+                        </button>
+                        <button className="w-full py-3 px-4 bg-neutral-800 hover:bg-neutral-900 text-white font-medium rounded-xl transition-colors shrink-0">
+                            Gerar Relatório Técnico PDF
+                        </button>
+                    </div>
+
+                </div>
+            </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+    );
+}
+
+// Subcomponente de lista de ponto
+function LogItem({ label, time, active }: { label: string, time: string, active: boolean }) {
+    return (
+        <div className="flex justify-between items-center bg-neutral-50 p-3 rounded-xl border border-transparent hover:border-neutral-200 transition-colors">
+            <span className={`text-sm font-medium ${active ? 'text-neutral-800' : 'text-neutral-400'}`}>
+                {label}
+            </span>
+            <span className={`font-mono text-base ${active ? 'text-neutral-900 font-semibold' : 'text-neutral-300'}`}>
+                {time}
+            </span>
         </div>
-      </main>
-    </div>
-  );
+    );
 }
