@@ -254,9 +254,9 @@ export default function PontoEletronico() {
                         <Link href="/resumo" className="w-full text-center py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium rounded-xl transition-colors shrink-0">
                             Ver Resumo Mensal
                         </Link>
-                        <button className="w-full py-3 px-4 bg-neutral-800 hover:bg-neutral-900 text-white font-medium rounded-xl transition-colors shrink-0">
+                        <Link href="/relatorio" className="w-full text-center py-3 px-4 bg-neutral-800 hover:bg-neutral-900 text-white font-medium rounded-xl transition-colors shrink-0">
                             Gerar Relatório Técnico PDF
-                        </button>
+                        </Link>
                     </div>
 
                 </div>
