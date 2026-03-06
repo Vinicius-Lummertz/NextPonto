@@ -33,7 +33,7 @@ export default function RelatorioPDF() {
     // Configurações do Relatório
     const [estagiario, setEstagiario] = useState('João da silva fulano');
     const [localTrabalho, setLocalTrabalho] = useState('Diretoria de Ti Tecnologia e Inovação');
-    const [responsavel, setResponsavel] = useState('Xing Long Pong Bing');
+    const [responsavel, setResponsavel] = useState(`Matheus Sant'ana Pacheco`);
     const [turno, setTurno] = useState<'MANHÃ' | 'TARDE'>('TARDE');
 
     const months = [
@@ -92,7 +92,7 @@ export default function RelatorioPDF() {
 
                 <div className="p-6 space-y-8 flex-1">
 
-                                        {/* Mês/Ano Referência */}
+                    {/* Mês/Ano Referência */}
                     <div className="space-y-3">
                         <label className="text-sm font-semibold text-neutral-800 flex items-center gap-2 uppercase tracking-wide">
                             <Calendar size={16} className="text-neutral-400" /> Mês de Referência
