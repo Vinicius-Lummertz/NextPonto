@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import Database from '@tauri-apps/plugin-sql';
+import Link from 'next/link';
 
 type Ponto = {
     id: number;
@@ -12,6 +14,8 @@ type Ponto = {
     saida_final?: string;
 };
 
+const DB_URL = "mysql://root:@localhost:3306/nextponto";
+
 export default function PontoEletronico() {
     const [username, setUsername] = useState('Carregando...');
     const [historicoMes, setHistoricoMes] = useState<Ponto[]>([]);
@@ -19,31 +23,49 @@ export default function PontoEletronico() {
     const [proximoPonto, setProximoPonto] = useState('Entrada');
     const [loading, setLoading] = useState(true);
 
-    // 1. Inicializa: Tauri -> Nome -> Fetch API
+    // 1. Inicializa: Tauri -> Nome -> Tauri SQL
     useEffect(() => {
         async function loadData() {
             try {
                 let name = 'Dev.Local';
-                try { // Roda o comando nativo Rust se existir
+                try {
                     // @ts-ignore - Ignore the missing typings if not fully typed
                     name = await invoke<string>('get_windows_user');
                 } catch (e) {
-                    console.log('Tauri não detectado, rodando fallback API do Next.js');
-                    const userRes = await fetch('/api/user');
-                    if (userRes.ok) {
-                        const userData = await userRes.json();
-                        name = userData.username;
-                    }
+                    console.log('Tauri não detectado, rodando fallback mockado');
                 }
-
                 setUsername(name);
-                const res = await fetch(`/api/ponto?username=${encodeURIComponent(name)}`);
 
-                if (res.ok) {
-                    const data = await res.json();
-                    setHistoricoMes(data.historico);
-                    setPontoHoje(data.hoje);
-                    setProximoPonto(data.next);
+                try {
+                    // @ts-ignore
+                    if (!window.__TAURI_INTERNALS__) {
+                        throw new Error("Aplicativo aberto no Navegador! Feche esta guia e abra o programa PontoEletronico (.exe) instalado, ele é necessário para acessar o Banco de Dados.");
+                    }
+                    const db = await Database.load(DB_URL);
+                    const historico = await db.select<Ponto[]>(
+                        `SELECT * FROM Ponto WHERE username = ? AND data >= DATE_SUB(NOW(), INTERVAL 1 MONTH) ORDER BY data DESC`,
+                        [name]
+                    );
+
+                    const now = new Date();
+                    const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+                    const todayStr = localDate.toISOString().split('T')[0];
+                    const hoje = historico.find(p => p.data.toString().startsWith(todayStr)) || null;
+
+                    let next = 'Entrada';
+                    if (hoje) {
+                        if (hoje.saida_final) next = 'Turno Concluído';
+                        else if (hoje.almoco_retorno) next = 'Saída Final';
+                        else if (hoje.almoco_saida) next = 'Retorno Almoço';
+                        else next = 'Saída Almoço';
+                    }
+
+                    setHistoricoMes(historico);
+                    setPontoHoje(hoje);
+                    setProximoPonto(next);
+                } catch (e: any) {
+                    console.error("Erro banco SQL:", e);
+                    setUsername(`Erro Crítico: ${e.message}`);
                 }
             } finally { setLoading(false); }
         }
@@ -54,21 +76,58 @@ export default function PontoEletronico() {
     const registrar = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/ponto', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setPontoHoje(data.ponto);
-                setProximoPonto(data.next);
+            const db = await Database.load(DB_URL);
+            const now = new Date();
+            const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+            const todayStr = localDate.toISOString().split('T')[0];
+            const sqlTime = localDate.toISOString().slice(0, 19).replace('T', ' ');
 
-                setHistoricoMes(prev => {
-                    const existsInfo = prev.find(p => p.id === data.ponto.id);
-                    return existsInfo ? prev.map(p => p.id === data.ponto.id ? data.ponto : p) : [data.ponto, ...prev];
-                });
+            const result = await db.select<Ponto[]>(
+                `SELECT * FROM Ponto WHERE username = ? AND data = ? LIMIT 1`,
+                [username, todayStr]
+            );
+
+            let ponto = result[0] || null;
+            let next = 'Turno Concluído';
+
+            if (!ponto) {
+                await db.execute(
+                    `INSERT INTO Ponto (username, data, entrada) VALUES (?, ?, ?)`,
+                    [username, todayStr, sqlTime]
+                );
+                const inserted = await db.select<Ponto[]>(
+                    `SELECT * FROM Ponto WHERE username = ? AND data = ? LIMIT 1`,
+                    [username, todayStr]
+                );
+                ponto = inserted[0];
+                next = 'Saída Almoço';
+            } else if (!ponto.almoco_saida) {
+                await db.execute(`UPDATE Ponto SET almoco_saida = ? WHERE id = ?`, [sqlTime, ponto.id]);
+                ponto.almoco_saida = localDate.toISOString().slice(0, 19);
+                next = 'Retorno Almoço';
+            } else if (!ponto.almoco_retorno) {
+                await db.execute(`UPDATE Ponto SET almoco_retorno = ? WHERE id = ?`, [sqlTime, ponto.id]);
+                ponto.almoco_retorno = localDate.toISOString().slice(0, 19);
+                next = 'Saída Final';
+            } else if (!ponto.saida_final) {
+                await db.execute(`UPDATE Ponto SET saida_final = ? WHERE id = ?`, [sqlTime, ponto.id]);
+                ponto.saida_final = localDate.toISOString().slice(0, 19);
+                next = 'Turno Concluído';
+            } else {
+                setLoading(false);
+                return;
             }
+
+            setPontoHoje(ponto);
+            setProximoPonto(next);
+
+            setHistoricoMes(prev => {
+                const existsInfo = prev.find(p => p.id === ponto!.id);
+                return existsInfo ? prev.map(p => p.id === ponto!.id ? ponto! : p) : [ponto!, ...prev];
+            });
+
+        } catch (e) {
+            console.error(e);
         } finally { setLoading(false); }
     };
 
@@ -162,7 +221,7 @@ export default function PontoEletronico() {
                     >
                         <div className="absolute inset-2 border-4 border-white/20 rounded-full pointer-events-none"></div>
                         <span className="text-3xl font-bold tracking-tight px-4 leading-tight whitespace-pre-line text-center">
-                            {loading ? 'Aguarde...' : `Registrar\n${proximoPonto}`}
+                            {loading ? 'Aguarde...' : (proximoPonto === 'Turno Concluído' ? 'Até amanhã!' : `Registrar\n${proximoPonto}`)}
                         </span>
                     </button>
                 </div>
@@ -192,9 +251,9 @@ export default function PontoEletronico() {
 
                     {/* Ações Gerenciais */}
                     <div className="bg-white rounded-3xl p-6 shadow-sm border border-neutral-200 flex flex-col gap-3">
-                        <button className="w-full py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium rounded-xl transition-colors shrink-0">
+                        <Link href="/resumo" className="w-full text-center py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium rounded-xl transition-colors shrink-0">
                             Ver Resumo Mensal
-                        </button>
+                        </Link>
                         <button className="w-full py-3 px-4 bg-neutral-800 hover:bg-neutral-900 text-white font-medium rounded-xl transition-colors shrink-0">
                             Gerar Relatório Técnico PDF
                         </button>
