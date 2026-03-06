@@ -14,8 +14,8 @@ const styles = StyleSheet.create({
     page: {
         fontFamily: 'Times-Roman',
         fontSize: 10,
-        paddingTop: 30,
-        paddingBottom: 40,
+        paddingTop: 20,
+        paddingBottom: 20,
         paddingHorizontal: 40,
         flexDirection: 'column',
     },
@@ -79,14 +79,14 @@ const styles = StyleSheet.create({
         borderBottom: '1px solid #000',
         textAlign: 'center',
     },
-    colDia: { width: '10%', borderRight: '1px solid #000', padding: 3, fontWeight: 'bold' },
-    colVal: { width: '22.5%', borderRight: '1px solid #000', padding: 3 },
-    colValLast: { width: '22.5%', padding: 3 },
+    colDia: { width: '10%', borderRight: '1px solid #000', padding: 2, fontWeight: 'bold' },
+    colVal: { width: '22.5%', borderRight: '1px solid #000', padding: 2 },
+    colValLast: { width: '22.5%', padding: 2 },
 
     // Linha Inteira (Fds / Feriado)
     fullRowText: {
         width: '90%',
-        padding: 3,
+        padding: 2,
         textAlign: 'center',
         fontWeight: 'bold',
         textTransform: 'uppercase'
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
 
     // Área de Assinaturas (Rodapé Isolado)
     signaturesContainer: {
-        marginTop: 60,
+        marginTop: 25,
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
@@ -197,13 +197,8 @@ const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, turno, mes, ano
         let txtT_In = '-', txtT_Out = '-';
 
         if (record && typeRow === 'NORMAL') {
-            if (turno === 'MANHÃ') {
-                txtM_In = formatTime(record.entrada);
-                txtM_Out = formatTime(record.almoco_saida || record.saida_final);
-            } else { // TARDE
-                txtT_In = formatTime(record.entrada || record.almoco_retorno);
-                txtT_Out = formatTime(record.saida_final);
-            }
+            txtM_In = formatTime(record.entrada);
+            txtT_Out = formatTime(record.almoco_saida || record.saida_final);
         }
 
         rows.push({
@@ -228,16 +223,18 @@ const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, turno, mes, ano
                         <Text style={styles.headerValue}>{localTrabalho}</Text>
                     </View>
                     <View style={styles.headerRow}>
-                        <Text style={styles.headerLabel}>HORÁRIO DE ESTÁGIO</Text>
-                        <Text style={styles.headerValue}>{turno === 'MANHÃ' ? '08h-14h' : '11h-17h'}</Text>
-                    </View>
-                    <View style={styles.headerRow}>
                         <Text style={styles.headerLabel}>RESPONSÁVEL DO SETOR</Text>
                         <Text style={styles.headerValue}>{responsavel}</Text>
                     </View>
                     <View style={styles.headerRowLast}>
-                        <Text style={styles.headerLabel}>MÊS DE REFERÊNCIA</Text>
-                        <Text style={styles.headerValue}>{mes}</Text>
+                        <View style={{ flexDirection: 'row', width: '60%', borderRight: '1px solid #000' }}>
+                            <Text style={{ width: '58.33%', backgroundColor: '#fff', borderRight: '1px solid #000', padding: 4, fontWeight: 'bold', fontSize: 11 }}>HORÁRIO DE ESTÁGIO</Text>
+                            <Text style={{ width: '41.67%', padding: 4, textAlign: 'center', fontSize: 11 }}>{turno === 'MANHÃ' ? '08h-14h' : '11h-17h'}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', width: '40%' }}>
+                            <Text style={{ width: '50%', backgroundColor: '#fff', borderRight: '1px solid #000', padding: 4, fontWeight: 'bold', fontSize: 11, textAlign: 'center' }}>MÊS</Text>
+                            <Text style={{ width: '50%', padding: 4, textAlign: 'center', fontSize: 11 }}>{mes}</Text>
+                        </View>
                     </View>
                 </View>
 
@@ -267,11 +264,8 @@ const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, turno, mes, ano
 
                             {r.typeRow !== 'NORMAL' ? (
                                 // Se for Sábado, Domingo, Feriado. Ocupa tudo ignorando divisão de turnos
-                                <View style={{ width: '90%', flexDirection: 'row' }}>
-                                    <View style={styles.colVal}><Text>{r.typeRow}</Text></View>
-                                    <View style={styles.colVal}><Text>{r.typeRow}</Text></View>
-                                    <View style={styles.colVal}><Text>{r.typeRow}</Text></View>
-                                    <View style={styles.colValLast}><Text>{r.typeRow}</Text></View>
+                                <View style={{ width: '90%', justifyContent: 'center', alignItems: 'center' }}>
+                                    <Text style={{ textAlign: 'center', fontWeight: 'bold' }}>{r.typeRow}</Text>
                                 </View>
                             ) : (
                                 // Turno Normal

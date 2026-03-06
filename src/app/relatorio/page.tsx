@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, FileText, Settings, User, Building, Calendar } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Settings, User, Building, Calendar, Printer, Save } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Database from '@tauri-apps/plugin-sql';
 import { invoke } from '@tauri-apps/api/core';
@@ -12,10 +12,6 @@ import FolhaPontoPDF from '@/components/FolhaPontoPDF';
 const PDFViewer = dynamic(() => import('@react-pdf/renderer').then(mod => mod.PDFViewer), {
     ssr: false,
     loading: () => <div className="w-full h-full flex items-center justify-center text-neutral-400 bg-neutral-100/50 rounded-2xl animate-pulse">Carregando visualizador de impressão...</div>
-});
-
-const PDFDownloadLink = dynamic(() => import('@react-pdf/renderer').then(mod => mod.PDFDownloadLink), {
-    ssr: false
 });
 
 const DB_URL = "mysql://root:@localhost:3306/nextponto";
@@ -96,30 +92,7 @@ export default function RelatorioPDF() {
 
                 <div className="p-6 space-y-8 flex-1">
 
-                    {/* Turno */}
-                    <div className="space-y-3">
-                        <label className="text-sm font-semibold text-neutral-800 flex items-center gap-2 uppercase tracking-wide">
-                            Horário de Estágio
-                        </label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => setTurno('MANHÃ')}
-                                className={`p-4 rounded-xl border-2 text-left transition-all ${turno === 'MANHÃ' ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm' : 'border-neutral-200 bg-white text-neutral-500 hover:border-blue-300'}`}
-                            >
-                                <span className="block font-bold text-lg mb-1">Manhã</span>
-                                <span className="block text-xs font-medium opacity-80">08h às 14h</span>
-                            </button>
-                            <button
-                                onClick={() => setTurno('TARDE')}
-                                className={`p-4 rounded-xl border-2 text-left transition-all ${turno === 'TARDE' ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm' : 'border-neutral-200 bg-white text-neutral-500 hover:border-blue-300'}`}
-                            >
-                                <span className="block font-bold text-lg mb-1">Tarde</span>
-                                <span className="block text-xs font-medium opacity-80">11h às 17h</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Mês/Ano Referência */}
+                                        {/* Mês/Ano Referência */}
                     <div className="space-y-3">
                         <label className="text-sm font-semibold text-neutral-800 flex items-center gap-2 uppercase tracking-wide">
                             <Calendar size={16} className="text-neutral-400" /> Mês de Referência
@@ -188,36 +161,33 @@ export default function RelatorioPDF() {
                 </div>
 
                 {/* Footer Sidebar do Botão de Export */}
-                <div className="p-6 border-t border-neutral-100 bg-neutral-50 sticky bottom-0">
-                    <PDFDownloadLink
-                        document={
-                            <FolhaPontoPDF
-                                estagiario={estagiario}
-                                localTrabalho={localTrabalho}
-                                responsavel={responsavel}
-                                turno={turno}
-                                mes={months[currentDate.getMonth()]}
-                                ano={currentDate.getFullYear()}
-                                historico={historico}
-                                monthIndex={currentDate.getMonth()}
-                            />
-                        }
-                        fileName={`Folha_Ponto_${months[currentDate.getMonth()]}_${currentDate.getFullYear()}.pdf`}
+                <div className="p-6 border-t border-neutral-100 bg-neutral-50 sticky bottom-0 flex gap-3">
+                    <button
+                        onClick={() => {
+                            const iframe = document.querySelector('iframe');
+                            if (iframe && iframe.contentWindow) {
+                                iframe.contentWindow.print();
+                            }
+                        }}
+                        className={`flex-1 py-4 px-4 rounded-xl flex items-center justify-center gap-2 font-semibold text-neutral-700 bg-white border border-neutral-200 shadow-sm hover:bg-neutral-50 hover:border-neutral-300 transition-all ${loading ? 'opacity-50 pointer-events-none' : ''}`}
                     >
-                        {({ loading: pdfLoading }) => (
-                            <button
-                                disabled={loading || pdfLoading}
-                                className={`w-full py-4 px-6 rounded-xl flex items-center justify-center gap-3 font-semibold text-white shadow-lg transition-all ${loading || pdfLoading ? 'bg-neutral-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/25 cursor-pointer active:scale-[0.98]'
-                                    }`}
-                            >
-                                {(loading || pdfLoading) ? 'Gerando Documento...' : (
-                                    <>
-                                        <Download size={20} /> Baixar PDF Final
-                                    </>
-                                )}
-                            </button>
-                        )}
-                    </PDFDownloadLink>
+                        <Printer size={18} /> Imprimir
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            const iframe = document.querySelector('iframe');
+                            if (iframe && iframe.src) {
+                                const a = document.createElement('a');
+                                a.href = iframe.src;
+                                a.download = `Folha_Ponto_${months[currentDate.getMonth()]}_${currentDate.getFullYear()}.pdf`;
+                                a.click();
+                            }
+                        }}
+                        className={`flex-1 py-4 px-4 rounded-xl flex items-center justify-center gap-2 font-semibold text-white bg-blue-600 shadow-lg shadow-blue-500/25 hover:bg-blue-700 hover:shadow-blue-500/40 transition-all active:scale-[0.98] ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                        <Save size={18} /> Salvar PDF
+                    </button>
                 </div>
             </div>
 
