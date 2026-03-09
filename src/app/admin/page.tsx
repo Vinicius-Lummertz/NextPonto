@@ -141,10 +141,10 @@ export default function AdminPage() {
     };
 
     const handleFerias = async (nome: string) => {
-        if (!window.confirm(`Deseja conceder 15 dias de fÃ©rias para ${nome}? Sistema isentarÃ¡ ele de justificar faltas pelos prÃ³ximos 15 dias a partir de hoje.`)) return;
+        if (!window.confirm(`Deseja conceder 15 dias de férias para ${nome}? Sistema isentará ele de justificar faltas pelos próximos 15 dias a partir de hoje.`)) return;
         const db = await Database.load(DB_URL);
         const tdStr = new Date().toISOString().split('T')[0];
-        await db.execute(`UPDATE Estagiarios SET data_inicio_ferias = ?, status = 'ATIVO' WHERE nome_usuario = ?`, [tdStr, nome]);
+        await db.execute(`UPDATE Estagiarios SET data_inicio_ferias = ?, status = 'FERIAS' WHERE nome_usuario = ?`, [tdStr, nome]);
         loadDashboard();
     };
 
@@ -175,7 +175,7 @@ export default function AdminPage() {
             setNovaJornada(8);
             setNovoPerfil('ESTAGIARIO');
             loadDashboard();
-            alert("UsuÃ¡rio cadastrado com sucesso!");
+            alert("Usuário cadastrado com sucesso!");
         } catch (e: any) {
             console.error(e);
             alert("Erro ao cadastrar: " + e.message);
@@ -380,7 +380,7 @@ export default function AdminPage() {
                     {activeTab === 'DESEMPENHO' && (
                         <div className="flex-1 flex flex-col h-full">
                             <h2 className="text-2xl font-bold mb-2 text-neutral-800">Desempenho e Analytics</h2>
-                            <p className="text-neutral-500 mb-6">Filtre seus colaboradores e visualize o balanÃ§o mensal de horas e mÃ©tricas de aderÃªncia.</p>
+                            <p className="text-neutral-500 mb-6">Filtre seus colaboradores e visualize o balanço mensal de horas e métricas de aderência.</p>
 
                             {/* Filtros */}
                             <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-100 flex items-center justify-between mb-6 shrink-0">
@@ -414,10 +414,10 @@ export default function AdminPage() {
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-neutral-100/50 text-neutral-500 text-xs uppercase tracking-widest">
-                                            <th className="p-4 font-semibold whitespace-nowrap">EstagiÃ¡rio</th>
-                                            <th className="p-4 font-semibold text-center">AderÃªncia de Horas</th>
-                                            <th className="p-4 font-semibold text-center">Faltas no MÃªs</th>
-                                            <th className="p-4 font-semibold text-center">MÃ©dia de AlmoÃ§o</th>
+                                            <th className="p-4 font-semibold whitespace-nowrap">Estagiário</th>
+                                            <th className="p-4 font-semibold text-center">Aderência de Horas</th>
+                                            <th className="p-4 font-semibold text-center">Faltas no Mês</th>
+                                            <th className="p-4 font-semibold text-center">Média de Almoço</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -537,7 +537,7 @@ export default function AdminPage() {
                                             </h3>
                                             <button
                                                 onClick={() => setIsCadastroOpen(false)}
-                                                className="inline-flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition hover:bg-neutral-700"
+                                                className="z-100 inline-flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition hover:bg-neutral-700"
                                             >
                                                 <X size={14} /> Fechar
                                             </button>
@@ -610,8 +610,8 @@ export default function AdminPage() {
                                     <thead className="bg-neutral-50 text-neutral-500 font-semibold border-b border-neutral-100">
                                         <tr>
                                             <th className="p-4 uppercase tracking-wider text-xs">Nome</th>
-                                            <th className="p-4 uppercase tracking-wider text-xs">Jornada DiÃ¡ria</th>
-                                            <th className="p-4 uppercase tracking-wider text-xs text-right">AÃ§Ãµes</th>
+                                            <th className="p-4 uppercase tracking-wider text-xs">Jornada Diária</th>
+                                            <th className="p-4 uppercase tracking-wider text-xs text-right">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -627,7 +627,7 @@ export default function AdminPage() {
                                                         <span className="hover:text-blue-600 transition cursor-pointer" onClick={() => router.push(`/resumo?user=${encodeURIComponent(est.nome_usuario)}`)}>
                                                             {est.nome_usuario}
                                                         </span>
-                                                        {isFeriando && <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border border-purple-200">Em FÃ©rias</span>}
+                                                        {isFeriando && <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border border-purple-200">Em Férias</span>}
                                                         {est.status === 'REMOVIDO' && <span className="ml-2 text-[10px] bg-neutral-200 text-neutral-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Bloqueado</span>}
                                                     </td>
                                                     <td className="p-4">
@@ -664,7 +664,7 @@ export default function AdminPage() {
                                                                     disabled={!canVacation}
                                                                     className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition ${canVacation ? 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100' : 'bg-neutral-50 text-neutral-400 border-neutral-100 cursor-not-allowed hidden'}`}
                                                                 >
-                                                                    Dar FÃ©rias
+                                                                    Dar Férias
                                                                 </button>
                                                                 <button onClick={() => handleRemover(est.nome_usuario)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 transition">Bloquear</button>
                                                             </div>
