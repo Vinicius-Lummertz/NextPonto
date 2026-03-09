@@ -24,6 +24,10 @@ export default function ResumoMensal() {
     const [historico, setHistorico] = useState<Ponto[]>([]);
     const [loading, setLoading] = useState(true);
     const [username, setUsername] = useState('Dev.Local');
+    const [jornadaEsperada, setJornadaEsperada] = useState(8); // Dinâmico do Banco
+    const [dataContratacao, setDataContratacao] = useState('2000-01-01'); // Limite para Faltas
+    const [dataInicioFerias, setDataInicioFerias] = useState<string | null>(null); // Férias
+    const [isAdminViewer, setIsAdminViewer] = useState(false); // Flag de visualização pelo painel admin
 
     // Sidebar State
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -43,6 +47,16 @@ export default function ResumoMensal() {
                     // @ts-ignore
                     name = await invoke<string>('get_windows_user');
                 } catch (e) { }
+
+                if (name === 'Vinicius Gomes' || name === 'Dev.Local') {
+                    const params = new URLSearchParams(window.location.search);
+                    const queryUser = params.get('user');
+                    if (queryUser) {
+                        name = queryUser;
+                        setIsAdminViewer(true);
+                    }
+                }
+
                 setUsername(name);
 
                 const db = await Database.load(DB_URL);
@@ -55,6 +69,21 @@ export default function ResumoMensal() {
                     `SELECT * FROM Ponto WHERE username = ? AND MONTH(data) = ? AND YEAR(data) = ?`,
                     [name, month, year]
                 );
+
+                try {
+                    const estagiarioRow = await db.select<{ jornada_diaria: number, data_inicio_ferias: string | null }[]>(
+                        `SELECT jornada_diaria, data_inicio_ferias FROM Estagiarios WHERE nome_usuario = ?`,
+                        [name]
+                    );
+                    if (estagiarioRow.length > 0) {
+                        setJornadaEsperada(estagiarioRow[0].jornada_diaria);
+                        if (estagiarioRow[0].data_inicio_ferias) {
+                            setDataInicioFerias(new Date(estagiarioRow[0].data_inicio_ferias).toISOString().split('T')[0]);
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Estagiario nao cadastrado na tabela, fallback 8h ativado", e);
+                }
 
                 setHistorico(data);
             } catch (e) {
@@ -129,9 +158,17 @@ export default function ResumoMensal() {
             const isPast = loopDateStr < todayDateStr;
             const isToday = loopDateStr === todayDateStr;
             const record = historico.find(p => p.data.toString().startsWith(loopDateStr));
+            const isBeforeHireDate = loopDateStr < dataContratacao;
 
-            if (isPast || isToday) {
-                dayExpectedMs = 8 * 3600000; // 8 hours expected
+            let isVacation = false;
+            if (dataInicioFerias) {
+                const diffTime = loopDate.getTime() - new Date(dataInicioFerias).getTime();
+                const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                if (diffDays >= 0 && diffDays <= 14) isVacation = true;
+            }
+
+            if ((isPast || isToday) && !isBeforeHireDate && !isVacation) {
+                dayExpectedMs = jornadaEsperada * 3600000; // Horas dinâmicas baseado no DB
             }
 
             if (record && record.entrada) {
@@ -154,7 +191,7 @@ export default function ResumoMensal() {
                     const tOut = record.saida_final ? new Date(record.saida_final).getTime() : (isToday ? new Date().getTime() : tIn);
                     dayWorkedMs += (tOut - tIn);
                 }
-            } else if (isPast && !record) {
+            } else if (isPast && !record && !isBeforeHireDate && !isVacation) {
                 faltasCount++;
             }
 
@@ -165,11 +202,11 @@ export default function ResumoMensal() {
 
         // Se fechou uma semana (5 dias) ou é o último dia
         if ((i + 1) % 5 === 0) {
-            if (currentWeekExpected > 0) {
+            if (currentWeekExpected > 0 || currentWeekWorked > 0) {
                 weeks.push({
                     weekTitle: `Semana ${weekCounter}`,
-                    worked: currentWeekWorked / 3600000,
-                    expected: currentWeekExpected / 3600000
+                    worked: currentWeekWorked,
+                    expected: currentWeekExpected
                 });
             }
             weekCounter++;
@@ -178,7 +215,22 @@ export default function ResumoMensal() {
         }
     }
 
-    const totalHoursStr = Math.floor(totalWorkedMs / 3600000);
+    const formatHorasText = (ms: number, forceSign = false) => {
+        if (!ms) return '0h';
+        const isNegative = ms < 0;
+        const absMs = Math.abs(ms);
+        const totalMinutes = Math.floor(absMs / 60000);
+        const hrs = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+
+        let timeStr = '';
+        if (hrs > 0) timeStr += `${hrs}h`;
+        if (mins > 0) timeStr += ` ${mins}m`;
+        if (hrs === 0 && mins === 0) return '0h';
+        return (isNegative ? '-' : (forceSign ? '+' : '')) + timeStr.trim();
+    };
+
+    const totalHoursStr = formatHorasText(totalWorkedMs);
     const avgLunchMins = lunchCount > 0 ? Math.floor((totalLunchMs / lunchCount) / 60000) : 0;
 
     const handleFileOpen = async () => {
@@ -198,6 +250,42 @@ export default function ResumoMensal() {
         }
     };
 
+    const handleSalvarJustificativa = async () => {
+        if (!selectedFalta || !justificativa) {
+            alert("Escreva o motivo da justificativa!");
+            return;
+        }
+
+        try {
+            const db = await Database.load(DB_URL);
+
+            // Tenta criar was a precaution, but the admin page creates it
+            await db.execute(`
+                CREATE TABLE IF NOT EXISTS Justificativas (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(150),
+                    data_falta DATE,
+                    motivo TEXT,
+                    anexo_path TEXT,
+                    status_aprovacao ENUM('PENDENTE', 'APROVADA', 'RECUSADA') DEFAULT 'PENDENTE'
+                )
+            `);
+
+            await db.execute(
+                `INSERT INTO Justificativas (username, data_falta, motivo, anexo_path) VALUES (?, ?, ?, ?)`,
+                [username, selectedFalta, justificativa, anexoPath || null]
+            );
+
+            alert("Sua justificativa foi enviada para o administrador com sucesso!");
+            setSelectedFalta(null);
+            setJustificativa('');
+            setAnexoPath(null);
+        } catch (e) {
+            console.error("Erro ao salvar justificativa:", e);
+            alert("Falha de conexão.");
+        }
+    };
+
     return (
         <div className="min-h-screen bg-[#FDFDFD] font-sans flex text-neutral-800">
             {/* Main Content Area */}
@@ -206,15 +294,24 @@ export default function ResumoMensal() {
 
                     {/* Header Row */}
                     <div className="flex justify-between items-center mb-8">
-                        <Link href="/" className="inline-flex items-center gap-2 text-neutral-500 hover:text-neutral-900 transition flex-shrink-0">
-                            <ArrowLeft size={20} />
-                            <span className="font-medium">Voltar</span>
-                        </Link>
+                        <div className="flex items-center gap-4">
+                            <Link href="/" className="inline-flex items-center gap-2 text-neutral-500 hover:text-neutral-900 transition flex-shrink-0">
+                                <ArrowLeft size={20} />
+                                <span className="font-medium">Ao Ponto</span>
+                            </Link>
+
+                            {isAdminViewer && (
+                                <Link href="/admin" className="inline-flex items-center gap-2 text-amber-600 hover:text-amber-700 bg-amber-50 px-4 py-2 rounded-xl border border-amber-200 font-bold transition flex-shrink-0 shadow-sm">
+                                    <ArrowLeft size={16} /> Voltar ao Painel Admin
+                                </Link>
+                            )}
+                        </div>
 
                         <div className="flex items-center gap-4">
                             <button onClick={prevMonth} className="p-2 hover:bg-neutral-100 rounded-full transition"><ChevronLeft /></button>
-                            <h2 className="text-2xl font-semibold capitalize w-48 text-center text-neutral-800">
-                                {currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                            <h2 className="text-2xl font-semibold w-auto min-w-[12rem] text-center text-neutral-800 flex flex-col items-center">
+                                <span className="capitalize">{currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                                {isAdminViewer && <span className="text-sm text-neutral-500 font-normal">Dashboard de {username}</span>}
                             </h2>
                             <button onClick={nextMonth} className="p-2 hover:bg-neutral-100 rounded-full transition"><ChevronRight /></button>
                         </div>
@@ -233,7 +330,7 @@ export default function ResumoMensal() {
                         <div className="bg-zinc-900 rounded-2xl p-6 text-white shadow-lg overflow-hidden relative">
                             <div className="absolute -right-4 -top-4 w-24 h-24 bg-zinc-800 rounded-full blur-2xl opacity-50"></div>
                             <h3 className="text-zinc-400 font-medium text-sm mb-1">Horas Trabalhadas no Mês</h3>
-                            <p className="text-4xl font-light">{totalHoursStr}<span className="text-lg text-zinc-500 font-medium ml-1">h</span></p>
+                            <p className="text-4xl font-light">{totalHoursStr}</p>
                         </div>
                         <div className="bg-zinc-900 rounded-2xl p-6 text-white shadow-lg overflow-hidden relative">
                             <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-900/40 rounded-full blur-2xl"></div>
@@ -276,6 +373,14 @@ export default function ResumoMensal() {
 
                                         const isPast = loopDateStr < todayDateStr;
                                         const isToday = loopDateStr === todayDateStr;
+                                        const isBeforeHireDate = loopDateStr < dataContratacao;
+
+                                        let isVacation = false;
+                                        if (dataInicioFerias) {
+                                            const diffTime = loopDate.getTime() - new Date(dataInicioFerias).getTime();
+                                            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                                            if (diffDays >= 0 && diffDays <= 14) isVacation = true;
+                                        }
 
                                         if (record) {
                                             if (record.saida_final) {
@@ -289,19 +394,39 @@ export default function ResumoMensal() {
                                             }
                                         } else {
                                             if (isPast) {
-                                                statusColor = 'bg-rose-50 border-rose-200 hover:border-rose-400 cursor-pointer shadow-sm';
-                                                statusText = 'Falta (Justificar)';
-                                                textColor = 'text-rose-600';
+                                                if (isBeforeHireDate) {
+                                                    statusColor = 'bg-neutral-50/50 border-dashed border-neutral-200';
+                                                    statusText = 'Fora do Contrato';
+                                                    textColor = 'text-neutral-300';
+                                                } else if (isVacation) {
+                                                    statusColor = 'bg-purple-50 border-purple-200';
+                                                    statusText = 'Férias (Isento)';
+                                                    textColor = 'text-purple-600';
+                                                } else {
+                                                    statusColor = 'bg-rose-50 border-rose-200 hover:border-rose-400 cursor-pointer shadow-sm';
+                                                    statusText = 'Falta (Justificar)';
+                                                    textColor = 'text-rose-600';
+                                                }
                                             } else if (isToday) {
-                                                statusColor = 'bg-blue-50 border-blue-100 hover:border-blue-300';
-                                                statusText = 'Hoje';
-                                                textColor = 'text-blue-700';
+                                                if (isVacation) {
+                                                    statusColor = 'bg-purple-50 border-purple-200';
+                                                    statusText = 'Férias (Isento)';
+                                                    textColor = 'text-purple-600';
+                                                } else {
+                                                    statusColor = 'bg-blue-50 border-blue-100 hover:border-blue-300';
+                                                    statusText = 'Hoje';
+                                                    textColor = 'text-blue-700';
+                                                }
+                                            } else if (isVacation) {
+                                                statusColor = 'bg-purple-50/50 border-dashed border-purple-200';
+                                                statusText = 'Férias (Agendado)';
+                                                textColor = 'text-purple-400';
                                             }
                                         }
 
                                         return (
                                             <div key={day}
-                                                onClick={() => !record && isPast ? setSelectedFalta(loopDateStr) : null}
+                                                onClick={() => !record && isPast && !isBeforeHireDate && !isVacation ? setSelectedFalta(loopDateStr) : null}
                                                 className={`h-24 rounded-2xl border-2 relative group flex flex-col justify-between p-3 transition ${statusColor}`}
                                             >
                                                 <span className={`font-mono text-sm font-semibold ${textColor}`}>{day}</span>
@@ -311,10 +436,10 @@ export default function ResumoMensal() {
                                                 {record && (
                                                     <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-200 bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-zinc-900 text-white rounded-xl p-3 shadow-xl pointer-events-none z-10 text-xs flex flex-col gap-1">
                                                         <div className="font-semibold mb-1 pb-1 border-b border-zinc-700">Detalhes do Dia</div>
-                                                        <div className="flex justify-between"><span>Entrada:</span> <span className="font-mono text-zinc-300">{record.entrada ? new Date(record.entrada).toLocaleTimeString().slice(0, 5) : '--:--'}</span></div>
-                                                        <div className="flex justify-between"><span>Saída Alm:</span> <span className="font-mono text-zinc-300">{record.almoco_saida ? new Date(record.almoco_saida).toLocaleTimeString().slice(0, 5) : '--:--'}</span></div>
+                                                        <div className="flex justify-between"><span>Chegada:</span> <span className="font-mono text-zinc-300">{record.entrada ? new Date(record.entrada).toLocaleTimeString().slice(0, 5) : '--:--'}</span></div>
+                                                        <div className="flex justify-between"><span>Ida Alm:</span> <span className="font-mono text-zinc-300">{record.almoco_saida ? new Date(record.almoco_saida).toLocaleTimeString().slice(0, 5) : '--:--'}</span></div>
                                                         <div className="flex justify-between"><span>Retorno Alm:</span> <span className="font-mono text-zinc-300">{record.almoco_retorno ? new Date(record.almoco_retorno).toLocaleTimeString().slice(0, 5) : '--:--'}</span></div>
-                                                        <div className="flex justify-between"><span>Saída Fnl:</span> <span className="font-mono text-zinc-300">{record.saida_final ? new Date(record.saida_final).toLocaleTimeString().slice(0, 5) : '--:--'}</span></div>
+                                                        <div className="flex justify-between"><span>Saída:</span> <span className="font-mono text-zinc-300">{record.saida_final ? new Date(record.saida_final).toLocaleTimeString().slice(0, 5) : '--:--'}</span></div>
                                                     </div>
                                                 )}
                                             </div>
@@ -354,16 +479,16 @@ export default function ResumoMensal() {
                                         <div className="space-y-3">
                                             <div className="flex justify-between text-sm">
                                                 <span className="text-neutral-500">Horas Realizadas</span>
-                                                <span className="font-mono font-medium text-neutral-800">{w.worked.toFixed(1)}h</span>
+                                                <span className="font-mono font-medium text-neutral-800">{formatHorasText(w.worked)}</span>
                                             </div>
                                             <div className="flex justify-between text-sm">
                                                 <span className="text-neutral-500">Horas Esperadas</span>
-                                                <span className="font-mono font-medium text-neutral-800">{w.expected.toFixed(1)}h</span>
+                                                <span className="font-mono font-medium text-neutral-800">{formatHorasText(w.expected)}</span>
                                             </div>
                                             <div className="pt-3 border-t border-neutral-100 flex justify-between mt-2">
                                                 <span className="text-sm font-semibold text-neutral-600">Saldo</span>
                                                 <span className={`font-mono text-sm font-bold ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                    {saldo > 0 ? '+' : ''}{saldo.toFixed(1)}h
+                                                    {formatHorasText(saldo, true)}
                                                 </span>
                                             </div>
                                         </div>
@@ -431,7 +556,7 @@ export default function ResumoMensal() {
                                 </div>
                                 <div className="p-4 bg-neutral-50 border-t border-neutral-100 flex justify-end gap-3">
                                     <button onClick={() => setSelectedFalta(null)} className="px-5 py-2.5 rounded-xl text-sm font-medium text-neutral-600 hover:bg-neutral-200 transition-colors">Cancelar</button>
-                                    <button className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2">
+                                    <button onClick={handleSalvarJustificativa} className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2">
                                         Salvar Justificativa <ArrowRight size={16} />
                                     </button>
                                 </div>

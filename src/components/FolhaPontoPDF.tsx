@@ -141,6 +141,7 @@ interface FolhaPontoPDFProps {
     ano: number;
     historico: Ponto[];
     monthIndex: number; // 0-11
+    dataInicioFerias?: string | null;
 }
 
 // Lista Fixa Temporária de Feriados Nacionais 2026 (Exemplo prático)
@@ -158,7 +159,7 @@ const FERIADOS_NACIONAIS = [
     '12-25', // Natal
 ];
 
-const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, turno, mes, ano, historico, monthIndex }: FolhaPontoPDFProps) => {
+const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, turno, mes, ano, historico, monthIndex, dataInicioFerias }: FolhaPontoPDFProps) => {
 
     // Calcular dias do mês
     const daysInMonth = new Date(ano, monthIndex + 1, 0).getDate();
@@ -184,10 +185,18 @@ const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, turno, mes, ano
         const isSextaOuSabOuDom = dayOfWeek === 0 || dayOfWeek === 6;
         const isFeriadoNacional = FERIADOS_NACIONAIS.includes(monthDayStr);
 
+        let isVacation = false;
+        if (dataInicioFerias) {
+            const diffTime = loopDate.getTime() - new Date(dataInicioFerias).getTime();
+            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+            if (diffDays >= 0 && diffDays <= 14) isVacation = true;
+        }
+
         let typeRow = 'NORMAL';
         if (dayOfWeek === 0) typeRow = 'Domingo';
         else if (dayOfWeek === 6) typeRow = 'Sábado';
         else if (isFeriadoNacional) typeRow = 'Feriado';
+        else if (isVacation) typeRow = 'FÉRIAS';
 
         // Puxar ponto batido deste dia (se houver)
         const record = historico.find(p => p.data.toString().startsWith(loopDateStr));

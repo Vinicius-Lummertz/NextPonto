@@ -56,8 +56,8 @@ export default function PontoEletronico() {
                     if (hoje) {
                         if (hoje.saida_final) next = 'Turno Concluído';
                         else if (hoje.almoco_retorno) next = 'Saída Final';
-                        else if (hoje.almoco_saida) next = 'Retorno Almoço';
-                        else next = 'Saída Almoço';
+                        else if (hoje.almoco_saida) next = 'Retorno do Almoço';
+                        else next = 'Ida ao Almoço';
                     }
 
                     setHistoricoMes(historico);
@@ -100,11 +100,11 @@ export default function PontoEletronico() {
                     [username, todayStr]
                 );
                 ponto = inserted[0];
-                next = 'Saída Almoço';
+                next = 'Ida ao Almoço';
             } else if (!ponto.almoco_saida) {
                 await db.execute(`UPDATE Ponto SET almoco_saida = ? WHERE id = ?`, [sqlTime, ponto.id]);
                 ponto.almoco_saida = localDate.toISOString().slice(0, 19);
-                next = 'Retorno Almoço';
+                next = 'Retorno do Almoço';
             } else if (!ponto.almoco_retorno) {
                 await db.execute(`UPDATE Ponto SET almoco_retorno = ? WHERE id = ?`, [sqlTime, ponto.id]);
                 ponto.almoco_retorno = localDate.toISOString().slice(0, 19);
@@ -156,10 +156,27 @@ export default function PontoEletronico() {
 
         // Se a pessoa estiver trabalhando hoje e a contagem for dinâmica:
         const todayStr = new Date().toISOString().split('T')[0];
-        const hojeTemPonto = historicoMes.some(p => new Date(p.data).toISOString().split('T')[0] === todayStr);
-        const diasTrabalhados = historicoMes.length;
-        const esperado = diasTrabalhados * 8;
+        // Conta a quantidade de dias do histórico (isso seria na semana? O App todo tava calculando histórico geral. Vamos ignorar hoje na expectativa:
+        const isTodayInHistory = historicoMes.some(p => new Date(p.data).toISOString().split('T')[0] === todayStr);
+        const pastDaysCnt = isTodayInHistory ? historicoMes.length - 1 : historicoMes.length;
+        const esperado = pastDaysCnt * 8;
         return { horasDia, esperado, saldo: horasDia - esperado };
+    };
+
+    const formatHorasText = (horas: number) => {
+        const ms = horas * 3600000;
+        const totalMinutes = Math.floor(ms / 60000);
+        const hrs = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+
+        let timeStr = '';
+        if (hrs > 0) timeStr += `${hrs} hora${hrs > 1 ? 's' : ''}`;
+        if (mins > 0) {
+            if (hrs > 0) timeStr += ' e ';
+            timeStr += `${mins} min`;
+        }
+        if (hrs === 0 && mins === 0) return '0 min';
+        return timeStr;
     };
 
     const { horasDia, esperado, saldo } = calcularSaldo();
@@ -236,15 +253,15 @@ export default function PontoEletronico() {
                             Histórico de Hoje
                         </h3>
                         <div className="space-y-4">
-                            <LogItem label="Entrada" time={formatTime(pontoHoje?.entrada)} active={!!pontoHoje?.entrada} />
-                            <LogItem label="Saída Almoço" time={formatTime(pontoHoje?.almoco_saida)} active={!!pontoHoje?.almoco_saida} />
-                            <LogItem label="Retorno Almoço" time={formatTime(pontoHoje?.almoco_retorno)} active={!!pontoHoje?.almoco_retorno} />
+                            <LogItem label="Chegada" time={formatTime(pontoHoje?.entrada)} active={!!pontoHoje?.entrada} />
+                            <LogItem label="Ida ao Almoço" time={formatTime(pontoHoje?.almoco_saida)} active={!!pontoHoje?.almoco_saida} />
+                            <LogItem label="Retorno do Almoço" time={formatTime(pontoHoje?.almoco_retorno)} active={!!pontoHoje?.almoco_retorno} />
                             <LogItem label="Saída Final" time={formatTime(pontoHoje?.saida_final)} active={!!pontoHoje?.saida_final} />
                         </div>
                         {pontoHoje && (
-                            <div className="mt-6 pt-6 border-t border-neutral-100 flex justify-between items-center text-neutral-800">
-                                <span className="text-sm font-semibold">Total Trabalhado no Dia</span>
-                                <span className="font-mono font-bold text-lg text-emerald-600">{horasHoje.toFixed(2)}h</span>
+                            <div className="mt-6 pt-6 border-t border-neutral-100 flex items-center text-neutral-800">
+                                <span className="text-sm font-semibold mr-2">Total Trabalhado no Dia</span>
+                                <span className="font-mono font-bold text-sm text-emerald-600">{formatHorasText(horasHoje)}</span>
                             </div>
                         )}
                     </div>
@@ -258,6 +275,19 @@ export default function PontoEletronico() {
                             Gerar Relatório Técnico PDF
                         </Link>
                     </div>
+
+                    {/* Módulo Admin */}
+                    {username === 'Vinicius Gomes' && (
+                        <div className="bg-neutral-900 rounded-3xl p-6 shadow-[0_4px_30px_rgba(0,0,0,0.1)] border border-neutral-800 flex flex-col gap-3 group transition-all hover:bg-black">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-amber-400 text-xl group-hover:scale-110 transition-transform">🛡️</span>
+                                <h4 className="text-white font-semibold flex-1 tracking-wide">Gestão da Equipe</h4>
+                            </div>
+                            <Link href="/admin" className="w-full text-center py-3 px-4 bg-amber-500 hover:bg-amber-400 text-neutral-900 font-bold rounded-xl transition-all shrink-0 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:shadow-[0_0_25px_rgba(245,158,11,0.4)]">
+                                Painel Administrativo
+                            </Link>
+                        </div>
+                    )}
 
                 </div>
             </div>

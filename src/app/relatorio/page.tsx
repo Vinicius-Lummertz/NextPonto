@@ -28,11 +28,12 @@ type Ponto = {
 export default function RelatorioPDF() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [historico, setHistorico] = useState<Ponto[]>([]);
+    const [dataInicioFerias, setDataInicioFerias] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Configurações do Relatório
     const [estagiario, setEstagiario] = useState('João da silva fulano');
-    const [localTrabalho, setLocalTrabalho] = useState('Diretoria de Ti Tecnologia e Inovação');
+    const [localTrabalho, setLocalTrabalho] = useState('Diretoria de Tecnologia e Inovação');
     const [responsavel, setResponsavel] = useState(`Matheus Sant'ana Pacheco`);
     const [turno, setTurno] = useState<'MANHÃ' | 'TARDE'>('TARDE');
 
@@ -62,10 +63,22 @@ export default function RelatorioPDF() {
                 const month = currentDate.getMonth() + 1;
                 const year = currentDate.getFullYear();
 
-                const data = await db.select<Ponto[]>(
-                    `SELECT * FROM Ponto WHERE username = ? AND MONTH(data) = ? AND YEAR(data) = ?`,
-                    [name, month, year]
-                );
+                const [data, estRow] = await Promise.all([
+                    db.select<Ponto[]>(
+                        `SELECT * FROM Ponto WHERE username = ? AND MONTH(data) = ? AND YEAR(data) = ?`,
+                        [name, month, year]
+                    ),
+                    db.select<{ data_inicio_ferias: string | null }[]>(
+                        `SELECT data_inicio_ferias FROM Estagiarios WHERE nome_usuario = ?`,
+                        [name]
+                    )
+                ]);
+
+                if (estRow.length > 0 && estRow[0].data_inicio_ferias) {
+                    setDataInicioFerias(new Date(estRow[0].data_inicio_ferias).toISOString().split('T')[0]);
+                } else {
+                    setDataInicioFerias(null);
+                }
 
                 setHistorico(data);
             } catch (e) {
@@ -213,6 +226,7 @@ export default function RelatorioPDF() {
                                 ano={currentDate.getFullYear()}
                                 historico={historico}
                                 monthIndex={currentDate.getMonth()}
+                                dataInicioFerias={dataInicioFerias}
                             />
                         </PDFViewer>
                     </div>
