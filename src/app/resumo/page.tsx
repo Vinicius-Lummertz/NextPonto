@@ -71,12 +71,13 @@ export default function ResumoMensal() {
                 );
 
                 try {
-                    const estagiarioRow = await db.select<{ jornada_diaria: number, data_inicio_ferias: string | null }[]>(
-                        `SELECT jornada_diaria, data_inicio_ferias FROM Estagiarios WHERE nome_usuario = ?`,
+                    const estagiarioRow = await db.select<{ jornada_diaria: number, data_inicio_ferias: string | null, data_contratacao: string }[]>(
+                        `SELECT jornada_diaria, data_inicio_ferias, data_contratacao FROM Estagiarios WHERE nome_usuario = ?`,
                         [name]
                     );
                     if (estagiarioRow.length > 0) {
                         setJornadaEsperada(estagiarioRow[0].jornada_diaria);
+                        setDataContratacao(new Date(estagiarioRow[0].data_contratacao).toISOString().split('T')[0]);
                         if (estagiarioRow[0].data_inicio_ferias) {
                             setDataInicioFerias(new Date(estagiarioRow[0].data_inicio_ferias).toISOString().split('T')[0]);
                         }
@@ -287,7 +288,7 @@ export default function ResumoMensal() {
     };
 
     return (
-        <div className="min-h-screen bg-[#FDFDFD] font-sans flex text-neutral-800">
+        <div className="np-page np-resumo-page min-h-screen bg-[#FDFDFD] font-sans flex text-neutral-800">
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col items-center p-8 transition-all duration-500 ease-in-out">
                 <div className={`w-full max-w-6xl transition-all duration-500 ${isSidebarOpen ? 'pr-80' : ''}`}>

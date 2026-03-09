@@ -17,6 +17,7 @@ type Estagiario = {
     data_contratacao: string;
     data_inicio_ferias?: string;
     status: 'ATIVO' | 'REMOVIDO' | 'FERIAS';
+    tipo_perfil: 'ESTAGIARIO' | 'GESTOR' | 'ESTAGIARIO_GESTOR';
 };
 
 type Ponto = {
@@ -54,6 +55,12 @@ export default function AdminPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [sortBy, setSortBy] = useState<'NOME' | 'FALTAS' | 'SALDO' | 'ALMOCO'>('NOME');
 
+    // Novo Cadastro State
+    const [novoNome, setNovoNome] = useState('');
+    const [novaJornada, setNovaJornada] = useState(8);
+    const [novaContratacao, setNovaContratacao] = useState(new Date().toISOString().split('T')[0]);
+    const [novoPerfil, setNovoPerfil] = useState<'ESTAGIARIO' | 'GESTOR' | 'ESTAGIARIO_GESTOR'>('ESTAGIARIO');
+
     // Data atual
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth() + 1;
@@ -73,13 +80,21 @@ export default function AdminPage() {
                 name = await invoke<string>('get_windows_user');
             } catch (e) { }
 
-            if (name !== 'Vinicius Gomes' && name !== 'Dev.Local') {
-                router.push('/');
-                return;
-            }
-            setAdminName(name);
-
             const db = await Database.load(DB_URL);
+
+            if (name !== 'Vinicius Gomes') {
+                const adminCheck = await db.select<{ tipo_perfil: string }[]>(
+                    `SELECT tipo_perfil FROM Estagiarios WHERE nome_usuario = ?`,
+                    [name]
+                );
+
+                if (adminCheck.length === 0 || adminCheck[0].tipo_perfil === 'ESTAGIARIO') {
+                    router.push('/');
+                    return;
+                }
+            }
+
+            setAdminName(name);
 
             // Garantir que a tabela Justificativas existe
             await db.execute(`
@@ -136,6 +151,34 @@ export default function AdminPage() {
         const db = await Database.load(DB_URL);
         await db.execute(`UPDATE Estagiarios SET jornada_diaria = ? WHERE nome_usuario = ?`, [newJornada, nome]);
         loadDashboard();
+    };
+
+    const handleChangePerfil = async (nome: string, novoPerfil: string) => {
+        const db = await Database.load(DB_URL);
+        await db.execute(`UPDATE Estagiarios SET tipo_perfil = ? WHERE nome_usuario = ?`, [novoPerfil, nome]);
+        loadDashboard();
+    };
+
+    const handleCadastrar = async () => {
+        if (!novoNome || !novaContratacao) {
+            alert("Preencha todos os campos para cadastrar.");
+            return;
+        }
+        try {
+            const db = await Database.load(DB_URL);
+            await db.execute(
+                `INSERT INTO Estagiarios (nome_usuario, jornada_diaria, data_contratacao, tipo_perfil, status) VALUES (?, ?, ?, ?, 'ATIVO')`,
+                [novoNome, novaJornada, novaContratacao, novoPerfil]
+            );
+            setNovoNome('');
+            setNovaJornada(8);
+            setNovoPerfil('ESTAGIARIO');
+            loadDashboard();
+            alert("Usuário cadastrado com sucesso!");
+        } catch (e: any) {
+            console.error(e);
+            alert("Erro ao cadastrar: " + e.message);
+        }
     };
 
     // Ações de Aprovação
@@ -280,7 +323,7 @@ export default function AdminPage() {
     const pendentesCount = justificativas.length;
 
     return (
-        <div className="min-h-screen bg-[#F5F5F7] font-sans flex flex-col text-neutral-800">
+        <div className="np-page np-admin-page min-h-screen bg-[#F5F5F7] font-sans flex flex-col text-neutral-800">
             {/* Header / Navbar */}
             <div className="bg-neutral-900 text-white p-6 flex items-center justify-between shadow-md z-10 sticky top-0">
                 <div className="flex items-center gap-6">
@@ -425,11 +468,13 @@ export default function AdminPage() {
                                     {justificativas.map(just => (
                                         <div key={just.id} className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6 flex flex-col relative group hover:border-blue-300 transition-all">
                                             <div className="flex items-center gap-3 mb-4">
-                                                <div className="w-10 h-10 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-lg">
+                                                <div className="w-10 h-10 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-lg cursor-pointer" onClick={() => router.push(`/resumo?user=${encodeURIComponent(just.username)}`)}>
                                                     {just.username.charAt(0)}
                                                 </div>
                                                 <div>
-                                                    <div className="font-semibold text-neutral-800 text-sm leading-tight">{just.username}</div>
+                                                    <div className="font-semibold text-neutral-800 text-sm leading-tight hover:text-blue-600 transition cursor-pointer" onClick={() => router.push(`/resumo?user=${encodeURIComponent(just.username)}`)}>
+                                                        {just.username}
+                                                    </div>
                                                     <div className="text-xs text-neutral-400 font-mono">Falta em: {new Date(just.data_falta).toLocaleDateString('pt-BR')}</div>
                                                 </div>
                                             </div>
@@ -460,9 +505,70 @@ export default function AdminPage() {
 
                     {/* === ABA: GESTAO === */}
                     {activeTab === 'GESTAO' && (
-                        <div className="flex-1 flex flex-col h-full">
+                        <div className="flex-1 flex flex-col h-full overflow-y-auto pr-2">
                             <h2 className="text-2xl font-bold mb-2 text-neutral-800">Parâmetros de Contrato</h2>
-                            <p className="text-neutral-500 mb-8">Altere jornadas diárias, conceda férias para estagiários veteranos ou encerre e inative acessos.</p>
+                            <p className="text-neutral-500 mb-8">Gerencie permissões, adicione novos membros ou altere jornadas de trabalho.</p>
+
+                            {/* Formulário de Cadastro */}
+                            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 mb-10 shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10">
+                                    <UserCheck size={80} className="text-white" />
+                                </div>
+                                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                                    <UserCheck size={20} className="text-amber-400" />
+                                    Cadastrar Novo Integrante
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest px-1">Nome de Usuário (Windows)</label>
+                                        <input
+                                            type="text"
+                                            value={novoNome}
+                                            onChange={(e) => setNovoNome(e.target.value)}
+                                            placeholder="Ex: Vinicius Gomes"
+                                            className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-4 py-2.5 outline-none focus:border-amber-500 transition"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest px-1">Data de Contratação</label>
+                                        <input
+                                            type="date"
+                                            value={novaContratacao}
+                                            onChange={(e) => setNovaContratacao(e.target.value)}
+                                            className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-4 py-2.5 outline-none focus:border-amber-500 transition"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest px-1">Jornada e Perfil</label>
+                                        <div className="flex gap-2">
+                                            <select
+                                                value={novaJornada}
+                                                onChange={(e) => setNovaJornada(Number(e.target.value))}
+                                                className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-3 py-2.5 flex-1 outline-none focus:border-amber-500 transition"
+                                            >
+                                                <option value={4}>4h/dia</option>
+                                                <option value={6}>6h/dia</option>
+                                                <option value={8}>8h/dia</option>
+                                            </select>
+                                            <select
+                                                value={novoPerfil}
+                                                onChange={(e) => setNovoPerfil(e.target.value as any)}
+                                                className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-3 py-2.5 flex-1 outline-none focus:border-amber-500 transition"
+                                            >
+                                                <option value="ESTAGIARIO">Comum</option>
+                                                <option value="GESTOR">Gestor</option>
+                                                <option value="ESTAGIARIO_GESTOR">E. Gestor</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleCadastrar}
+                                    className="mt-6 w-full py-3 bg-amber-500 hover:bg-amber-400 text-neutral-900 font-bold rounded-xl transition shadow-lg shadow-amber-500/20 active:scale-[0.98]"
+                                >
+                                    Confirmar Cadastro
+                                </button>
+                            </div>
 
                             <h3 className="text-xl font-semibold text-neutral-800 mb-6 flex items-center gap-2">Gerir Pessoas e Jornadas</h3>
                             <div className="bg-white rounded-3xl border border-neutral-200 overflow-hidden shadow-sm">
@@ -484,22 +590,35 @@ export default function AdminPage() {
                                             return (
                                                 <tr key={est.nome_usuario} className={`border-t border-neutral-100 ${est.status === 'REMOVIDO' ? 'opacity-50 grayscale' : 'hover:bg-neutral-50 transition'}`}>
                                                     <td className="p-4 font-semibold text-neutral-800">
-                                                        {est.nome_usuario}
+                                                        <span className="hover:text-blue-600 transition cursor-pointer" onClick={() => router.push(`/resumo?user=${encodeURIComponent(est.nome_usuario)}`)}>
+                                                            {est.nome_usuario}
+                                                        </span>
                                                         {isFeriando && <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border border-purple-200">Em Férias</span>}
                                                         {est.status === 'REMOVIDO' && <span className="ml-2 text-[10px] bg-neutral-200 text-neutral-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Bloqueado</span>}
                                                     </td>
                                                     <td className="p-4">
                                                         {est.status === 'ATIVO' && !isFeriando && (
-                                                            <div className="flex bg-neutral-100 rounded-xl p-1 w-max">
-                                                                {[4, 6, 8].map(h => (
-                                                                    <button
-                                                                        key={h}
-                                                                        onClick={() => handleChangeJornada(est.nome_usuario, h)}
-                                                                        className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${est.jornada_diaria === h ? 'bg-white text-blue-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
-                                                                    >
-                                                                        {h}h
-                                                                    </button>
-                                                                ))}
+                                                            <div className="flex flex-col gap-2 w-max">
+                                                                <div className="flex bg-neutral-100 rounded-xl p-1 w-max">
+                                                                    {[4, 6, 8].map(h => (
+                                                                        <button
+                                                                            key={h}
+                                                                            onClick={() => handleChangeJornada(est.nome_usuario, h)}
+                                                                            className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${est.jornada_diaria === h ? 'bg-white text-blue-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-800'}`}
+                                                                        >
+                                                                            {h}h
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                                <select
+                                                                    value={est.tipo_perfil || 'ESTAGIARIO'}
+                                                                    onChange={(e) => handleChangePerfil(est.nome_usuario, e.target.value)}
+                                                                    className="bg-neutral-50 border border-neutral-200 text-xs font-semibold text-neutral-600 rounded-lg px-2 py-1 outline-none mt-1"
+                                                                >
+                                                                    <option value="ESTAGIARIO">Comum</option>
+                                                                    <option value="GESTOR">Gestor Puro</option>
+                                                                    <option value="ESTAGIARIO_GESTOR">Bate Ponto + Gestor</option>
+                                                                </select>
                                                             </div>
                                                         )}
                                                     </td>

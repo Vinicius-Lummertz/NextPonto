@@ -91,7 +91,7 @@ export default function RelatorioPDF() {
     }, [currentDate]);
 
     return (
-        <div className="min-h-screen bg-[#F5F5F7] font-sans flex text-neutral-800">
+        <div className="np-page np-relatorio-page min-h-screen bg-[#F5F5F7] font-sans flex text-neutral-800">
             {/* Sidebar Configuração */}
             <div className="w-96 bg-white border-r border-neutral-200 shadow-sm flex flex-col h-screen overflow-y-auto">
                 <div className="p-6 border-b border-neutral-100 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur z-10">

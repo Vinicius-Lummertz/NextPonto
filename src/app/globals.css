@@ -12,15 +12,106 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html.dark {
+  --background: #0b1220;
+  --foreground: #e5e7eb;
+  color-scheme: dark;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+html.dark .bg-white {
+  background-color: #111827 !important;
+}
+
+html.dark .bg-neutral-50,
+html.dark .bg-neutral-100,
+html.dark .bg-neutral-200,
+html.dark .bg-\[\#F5F5F7\],
+html.dark .bg-\[\#FDFDFD\] {
+  background-color: #0f172a !important;
+}
+
+html.dark .bg-neutral-900,
+html.dark .bg-zinc-900 {
+  background-color: #020617 !important;
+}
+
+html.dark .border-neutral-100,
+html.dark .border-neutral-200,
+html.dark .border-neutral-300 {
+  border-color: #334155 !important;
+}
+
+html.dark .text-neutral-900,
+html.dark .text-neutral-800,
+html.dark .text-neutral-700 {
+  color: #e5e7eb !important;
+}
+
+html.dark .text-neutral-600,
+html.dark .text-neutral-500,
+html.dark .text-neutral-400 {
+  color: #94a3b8 !important;
+}
+
+/* Dark mode refinado por pagina */
+html.dark .np-page {
+  color: #e2e8f0;
+}
+
+html.dark .np-home-page {
+  background: radial-gradient(circle at 15% 15%, #1e293b 0%, #020617 55%);
+}
+
+html.dark .np-home-page .bg-white {
+  background-color: rgba(15, 23, 42, 0.86) !important;
+  border-color: #334155 !important;
+  backdrop-filter: blur(6px);
+}
+
+html.dark .np-admin-page {
+  background: radial-gradient(circle at 85% 0%, #1f2937 0%, #020617 55%);
+}
+
+html.dark .np-admin-page .bg-white {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  border-color: #334155 !important;
+}
+
+html.dark .np-admin-page .bg-neutral-900 {
+  background-color: #000814 !important;
+  border-color: #1f2937 !important;
+}
+
+html.dark .np-resumo-page {
+  background: radial-gradient(circle at 10% 0%, #1f2937 0%, #020617 60%);
+}
+
+html.dark .np-resumo-page .bg-white {
+  background-color: rgba(15, 23, 42, 0.88) !important;
+  border-color: #334155 !important;
+}
+
+html.dark .np-resumo-page .bg-neutral-50,
+html.dark .np-resumo-page .bg-neutral-100 {
+  background-color: #0b1324 !important;
+}
+
+html.dark .np-relatorio-page {
+  background: radial-gradient(circle at 80% 20%, #1e293b 0%, #020617 58%);
+}
+
+html.dark .np-relatorio-page .bg-white {
+  background-color: rgba(15, 23, 42, 0.92) !important;
+  border-color: #334155 !important;
+}
+
+html.dark .np-relatorio-page .bg-neutral-50,
+html.dark .np-relatorio-page .bg-neutral-200 {
+  background-color: #0b1324 !important;
 }

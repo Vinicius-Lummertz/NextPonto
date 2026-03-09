@@ -21,6 +21,7 @@ export default function PontoEletronico() {
     const [historicoMes, setHistoricoMes] = useState<Ponto[]>([]);
     const [pontoHoje, setPontoHoje] = useState<Ponto | null>(null);
     const [proximoPonto, setProximoPonto] = useState('Entrada');
+    const [tipoPerfil, setTipoPerfil] = useState<'ESTAGIARIO' | 'GESTOR' | 'ESTAGIARIO_GESTOR'>('ESTAGIARIO');
     const [loading, setLoading] = useState(true);
 
     // 1. Inicializa: Tauri -> Nome -> Tauri SQL
@@ -42,6 +43,16 @@ export default function PontoEletronico() {
                         throw new Error("Aplicativo aberto no Navegador! Feche esta guia e abra o programa PontoEletronico (.exe) instalado, ele é necessário para acessar o Banco de Dados.");
                     }
                     const db = await Database.load(DB_URL);
+
+                    const perfilQuery = await db.select<{ tipo_perfil: string }[]>(
+                        `SELECT tipo_perfil FROM Estagiarios WHERE nome_usuario = ?`,
+                        [name]
+                    );
+
+                    if (perfilQuery.length > 0) {
+                        setTipoPerfil(perfilQuery[0].tipo_perfil as 'ESTAGIARIO' | 'GESTOR' | 'ESTAGIARIO_GESTOR');
+                    }
+
                     const historico = await db.select<Ponto[]>(
                         `SELECT * FROM Ponto WHERE username = ? AND data >= DATE_SUB(NOW(), INTERVAL 1 MONTH) ORDER BY data DESC`,
                         [name]
@@ -219,29 +230,43 @@ export default function PontoEletronico() {
     const horasHoje = calcularHorasHoje();
 
     return (
-        <div className="min-h-screen bg-neutral-100 flex items-center justify-center p-6 font-sans">
+        <div className="np-page np-home-page min-h-screen bg-neutral-100 flex items-center justify-center p-6 font-sans">
             <div className="max-w-5xl w-full flex flex-col md:flex-row gap-6">
 
                 {/* Principal - Botão */}
-                <div className="flex-1 bg-white rounded-3xl p-10 shadow-sm border border-neutral-200 flex flex-col items-center justify-center gap-12">
-                    <div className="text-center">
-                        <h1 className="text-2xl font-semibold text-neutral-800 tracking-tight">
-                            Registrando ponto para o dia: {formatDate(new Date())}
-                        </h1>
-                        <p className="text-sm text-neutral-500 mt-2">Logado como: <strong className="text-neutral-800">{username}</strong></p>
-                    </div>
+                {tipoPerfil !== 'GESTOR' ? (
+                    <div className="flex-1 bg-white rounded-3xl p-10 shadow-sm border border-neutral-200 flex flex-col items-center justify-center gap-12">
+                        <div className="text-center">
+                            <h1 className="text-2xl font-semibold text-neutral-800 tracking-tight">
+                                Registrando ponto para o dia: {formatDate(new Date())}
+                            </h1>
+                            <p className="text-sm text-neutral-500 mt-2">Logado como: <strong className="text-neutral-800">{username}</strong></p>
+                        </div>
 
-                    <button
-                        disabled={proximoPonto === 'Turno Concluído' || loading}
-                        onClick={registrar}
-                        className={`w-64 h-64 rounded-full flex items-center justify-center text-white transition-all transform hover:scale-105 active:scale-95 shadow-xl ${proximoPonto === 'Turno Concluído' ? 'bg-neutral-300 pointer-events-none' : btnCor}`}
-                    >
-                        <div className="absolute inset-2 border-4 border-white/20 rounded-full pointer-events-none"></div>
-                        <span className="text-3xl font-bold tracking-tight px-4 leading-tight whitespace-pre-line text-center">
-                            {loading ? 'Aguarde...' : (proximoPonto === 'Turno Concluído' ? 'Até amanhã!' : `Registrar\n${proximoPonto}`)}
-                        </span>
-                    </button>
-                </div>
+                        <button
+                            disabled={proximoPonto === 'Turno Concluído' || loading}
+                            onClick={registrar}
+                            className={`peer cursor-pointer w-64 h-64 rounded-full flex items-center justify-center text-white transition-all transform hover:scale-105 active:scale-95 shadow-xl ${proximoPonto === 'Turno Concluído' ? 'bg-neutral-300 pointer-events-none' : btnCor}`}
+                        >
+                            <div className="absolute inset-2 border-4 border-white/20 rounded-full pointer-events-none"></div>
+                            <span className="cursor-pointer text-3xl font-bold tracking-tight px-4 leading-tight whitespace-pre-line text-center">
+                                {loading ? 'Aguarde...' : (proximoPonto === 'Turno Concluído' ? 'Até amanhã!' : `Registrar\n${proximoPonto}`)}
+                            </span>
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex-1 bg-white rounded-3xl p-10 shadow-sm border border-neutral-200 flex flex-col items-center justify-center">
+                        <div className="w-24 h-24 bg-neutral-100 rounded-full flex items-center justify-center mb-6">
+                            <span className="text-4xl">👋</span>
+                        </div>
+                        <h1 className="text-3xl font-bold text-neutral-800 tracking-tight mb-2">
+                            Olá, {username.split(' ')[0]}
+                        </h1>
+                        <p className="text-neutral-500 text-center max-w-sm">
+                            Seu perfil está configurado como <strong>Gestor</strong>. Utilize o painel lateral para acessar as ferramentas administrativas da equipe.
+                        </p>
+                    </div>
+                )}
 
                 {/* Dashboard Direito */}
                 <div className="w-full md:w-96 flex flex-col gap-6">
@@ -277,13 +302,13 @@ export default function PontoEletronico() {
                     </div>
 
                     {/* Módulo Admin */}
-                    {username === 'Vinicius Gomes' && (
-                        <div className="bg-neutral-900 rounded-3xl p-6 shadow-[0_4px_30px_rgba(0,0,0,0.1)] border border-neutral-800 flex flex-col gap-3 group transition-all hover:bg-black">
+                    {(tipoPerfil === 'GESTOR' || tipoPerfil === 'ESTAGIARIO_GESTOR' || username === 'Vinicius Gomes') && (
+                        <div className="bg-neutral-900 rounded-3xl p-6 shadow-[0_4px_30px_rgba(0,0,0,0.1)] border border-neutral-800 flex flex-col gap-3 group transition-all hover:bg-black peer-hover:border-transparent peer-hover:shadow-none">
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="text-amber-400 text-xl group-hover:scale-110 transition-transform">🛡️</span>
                                 <h4 className="text-white font-semibold flex-1 tracking-wide">Gestão da Equipe</h4>
                             </div>
-                            <Link href="/admin" className="w-full text-center py-3 px-4 bg-amber-500 hover:bg-amber-400 text-neutral-900 font-bold rounded-xl transition-all shrink-0 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:shadow-[0_0_25px_rgba(245,158,11,0.4)]">
+                            <Link href="/admin" className="w-full text-center py-3 px-4 bg-amber-500 hover:bg-amber-400 text-neutral-900 font-bold rounded-xl transition-all shrink-0 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:shadow-[0_0_25px_rgba(245,158,11,0.4)] peer-hover:opacity-0 peer-hover:pointer-events-none duration-300">
                                 Painel Administrativo
                             </Link>
                         </div>
