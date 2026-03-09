@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import Database from '@tauri-apps/plugin-sql';
 import Link from 'next/link';
-import { ArrowLeft, Shield, CheckCircle, Users, BarChart, Search, XCircle, UserX, Clock, Map, UserCheck, Plane } from 'lucide-react';
+import { ArrowLeft, Shield, CheckCircle, Users, BarChart, Search, XCircle, UserCheck, UserPlus, X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
 
 const DB_URL = "mysql://root:@localhost:3306/nextponto";
@@ -60,6 +60,7 @@ export default function AdminPage() {
     const [novaJornada, setNovaJornada] = useState(8);
     const [novaContratacao, setNovaContratacao] = useState(new Date().toISOString().split('T')[0]);
     const [novoPerfil, setNovoPerfil] = useState<'ESTAGIARIO' | 'GESTOR' | 'ESTAGIARIO_GESTOR'>('ESTAGIARIO');
+    const [isCadastroOpen, setIsCadastroOpen] = useState(false);
 
     // Data atual
     const currentDate = new Date();
@@ -108,11 +109,11 @@ export default function AdminPage() {
                 )
             `);
 
-            // 1. Carregar Estagiarios Ativos/Ferias (não removidos)
+            // 1. Carregar Estagiarios Ativos/Ferias (nÃ£o removidos)
             const users = await db.select<Estagiario[]>(`SELECT * FROM Estagiarios WHERE status != 'REMOVIDO'`);
             setEstagiarios(users);
 
-            // 2. Carregar Pontos de todo mundo no mês atual
+            // 2. Carregar Pontos de todo mundo no mÃªs atual
             const pts = await db.select<Ponto[]>(
                 `SELECT * FROM Ponto WHERE MONTH(data) = ? AND YEAR(data) = ?`,
                 [currentMonth, currentYear]
@@ -131,7 +132,7 @@ export default function AdminPage() {
         }
     }
 
-    // Ações de Gestão
+    // AÃ§Ãµes de GestÃ£o
     const handleRemover = async (nome: string) => {
         if (!window.confirm(`Deseja realmente bloquear o acesso de ${nome}?`)) return;
         const db = await Database.load(DB_URL);
@@ -140,7 +141,7 @@ export default function AdminPage() {
     };
 
     const handleFerias = async (nome: string) => {
-        if (!window.confirm(`Deseja conceder 15 dias de férias para ${nome}? Sistema isentará ele de justificar faltas pelos próximos 15 dias a partir de hoje.`)) return;
+        if (!window.confirm(`Deseja conceder 15 dias de fÃ©rias para ${nome}? Sistema isentarÃ¡ ele de justificar faltas pelos prÃ³ximos 15 dias a partir de hoje.`)) return;
         const db = await Database.load(DB_URL);
         const tdStr = new Date().toISOString().split('T')[0];
         await db.execute(`UPDATE Estagiarios SET data_inicio_ferias = ?, status = 'ATIVO' WHERE nome_usuario = ?`, [tdStr, nome]);
@@ -174,14 +175,14 @@ export default function AdminPage() {
             setNovaJornada(8);
             setNovoPerfil('ESTAGIARIO');
             loadDashboard();
-            alert("Usuário cadastrado com sucesso!");
+            alert("UsuÃ¡rio cadastrado com sucesso!");
         } catch (e: any) {
             console.error(e);
             alert("Erro ao cadastrar: " + e.message);
         }
     };
 
-    // Ações de Aprovação
+    // AÃ§Ãµes de AprovaÃ§Ã£o
     const handleAprovarFalta = async (id: number, username: string, dataFalta: string) => {
         const db = await Database.load(DB_URL);
         await db.execute(`UPDATE Justificativas SET status_aprovacao = 'APROVADA' WHERE id = ?`, [id]);
@@ -189,12 +190,12 @@ export default function AdminPage() {
         // Inserir registro no ponto indicando folga abonada
         const dtFalta = new Date(dataFalta).toISOString().split('T')[0];
 
-        // Verifica se já existe um ponto no dia
+        // Verifica se jÃ¡ existe um ponto no dia
         const check = await db.select<any[]>(`SELECT id FROM Ponto WHERE username = ? AND DATE(data) = ?`, [username, dtFalta]);
         if (check.length === 0) {
             await db.execute(
                 `INSERT INTO Ponto (username, data, entrada, saida_final) VALUES (?, ?, ?, ?)`,
-                [username, dtFalta, `${dtFalta} 08:00:00`, `${dtFalta} 16:00:00`] // Horário genérico preenchido pra abonar
+                [username, dtFalta, `${dtFalta} 08:00:00`, `${dtFalta} 16:00:00`] // HorÃ¡rio genÃ©rico preenchido pra abonar
             );
         }
 
@@ -211,18 +212,18 @@ export default function AdminPage() {
         try {
             await open(path);
         } catch (e) {
-            alert("Não foi possível abrir o anexo nativamente. Verifique o caminho absoluto.");
+            alert("NÃ£o foi possÃ­vel abrir o anexo nativamente. Verifique o caminho absoluto.");
         }
     };
 
     // Processar KPIs por Estagiario
     const kpisData = useMemo(() => {
-        // Quantidade de dias úteis no mes até agora (ou total dependendo da regra)
+        // Quantidade de dias Ãºteis no mes atÃ© agora (ou total dependendo da regra)
         const year = currentDate.getFullYear();
         const monthIndex = currentDate.getMonth();
         const daysInMonthCalculated = new Date(year, monthIndex + 1, 0).getDate();
 
-        const validDays: string[] = []; // Dias úteis até hoje
+        const validDays: string[] = []; // Dias Ãºteis atÃ© hoje
         for (let day = 1; day <= daysInMonthCalculated; day++) {
             const d = new Date(year, monthIndex, day);
             const dayOfWeek = d.getDay();
@@ -333,7 +334,7 @@ export default function AdminPage() {
                     <div className="h-6 w-px bg-neutral-700"></div>
                     <div className="flex items-center gap-3">
                         <Shield className="text-amber-400" size={24} />
-                        <h1 className="text-xl font-bold tracking-wide">Painel de Gestão Avançada</h1>
+                        <h1 className="text-xl font-bold tracking-wide">Painel de GestÃ£o AvanÃ§ada</h1>
                     </div>
                 </div>
                 <div className="text-sm text-neutral-400">
@@ -359,7 +360,7 @@ export default function AdminPage() {
                         className={`flex items-center gap-3 px-5 py-4 rounded-2xl font-semibold transition-all shadow-sm border ${activeTab === 'APROVACOES' ? 'bg-white border-white text-neutral-900 shadow-neutral-200 transform scale-105' : 'bg-transparent border-transparent text-neutral-500 hover:bg-white/50'}`}
                     >
                         <CheckCircle size={20} className={activeTab === 'APROVACOES' ? 'text-emerald-500' : ''} />
-                        Aprovações de Faltas
+                        Aprovação de Faltas
                         {pendentesCount > 0 && <span className="ml-auto bg-rose-500 text-white text-xs px-2 py-0.5 rounded-full">{pendentesCount}</span>}
                     </button>
 
@@ -379,7 +380,7 @@ export default function AdminPage() {
                     {activeTab === 'DESEMPENHO' && (
                         <div className="flex-1 flex flex-col h-full">
                             <h2 className="text-2xl font-bold mb-2 text-neutral-800">Desempenho e Analytics</h2>
-                            <p className="text-neutral-500 mb-6">Filtre seus colaboradores e visualize o balanço mensal de horas e métricas de aderência.</p>
+                            <p className="text-neutral-500 mb-6">Filtre seus colaboradores e visualize o balanÃ§o mensal de horas e mÃ©tricas de aderÃªncia.</p>
 
                             {/* Filtros */}
                             <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-100 flex items-center justify-between mb-6 shrink-0">
@@ -403,7 +404,7 @@ export default function AdminPage() {
                                         <option value="NOME">Nome (A-Z)</option>
                                         <option value="FALTAS">Mais Faltas Injustificadas</option>
                                         <option value="SALDO">Menor Saldo de Horas</option>
-                                        <option value="ALMOCO">Maior Atraso de Almoço</option>
+                                        <option value="ALMOCO">Maior Atraso de AlmoÃ§o</option>
                                     </select>
                                 </div>
                             </div>
@@ -413,10 +414,10 @@ export default function AdminPage() {
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-neutral-100/50 text-neutral-500 text-xs uppercase tracking-widest">
-                                            <th className="p-4 font-semibold whitespace-nowrap">Estagiário</th>
-                                            <th className="p-4 font-semibold text-center">Aderência de Horas</th>
-                                            <th className="p-4 font-semibold text-center">Faltas no Mês</th>
-                                            <th className="p-4 font-semibold text-center">Média de Almoço</th>
+                                            <th className="p-4 font-semibold whitespace-nowrap">EstagiÃ¡rio</th>
+                                            <th className="p-4 font-semibold text-center">AderÃªncia de Horas</th>
+                                            <th className="p-4 font-semibold text-center">Faltas no MÃªs</th>
+                                            <th className="p-4 font-semibold text-center">MÃ©dia de AlmoÃ§o</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -456,7 +457,7 @@ export default function AdminPage() {
                     {activeTab === 'APROVACOES' && (
                         <div className="flex-1 flex flex-col h-full bg-neutral-50/50 rounded-2xl">
                             <h2 className="text-2xl font-bold mb-2 text-neutral-800">Caixa de Justificativas</h2>
-                            <p className="text-neutral-500 mb-8">Aceite atestados e abone faltas ou recuse requisições pendentes.</p>
+                            <p className="text-neutral-500 mb-8">Aceite atestados e abone faltas ou recuse requisiÃ§Ãµes pendentes.</p>
 
                             {justificativas.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center text-neutral-400 gap-4 opacity-70">
@@ -506,68 +507,101 @@ export default function AdminPage() {
                     {/* === ABA: GESTAO === */}
                     {activeTab === 'GESTAO' && (
                         <div className="flex-1 flex flex-col h-full overflow-y-auto pr-2">
-                            <h2 className="text-2xl font-bold mb-2 text-neutral-800">Parâmetros de Contrato</h2>
-                            <p className="text-neutral-500 mb-8">Gerencie permissões, adicione novos membros ou altere jornadas de trabalho.</p>
+                            <h2 className="text-2xl font-bold mb-2 text-neutral-800">ParÃ¢metros de Contrato</h2>
+                            <p className="text-neutral-500 mb-8">Gerencie permissÃµes, adicione novos membros ou altere jornadas de trabalho.</p>
 
-                            {/* Formulário de Cadastro */}
-                            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 mb-10 shadow-xl relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-10">
-                                    <UserCheck size={80} className="text-white" />
-                                </div>
-                                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                                    <UserCheck size={20} className="text-amber-400" />
-                                    Cadastrar Novo Integrante
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest px-1">Nome de Usuário (Windows)</label>
-                                        <input
-                                            type="text"
-                                            value={novoNome}
-                                            onChange={(e) => setNovoNome(e.target.value)}
-                                            placeholder="Ex: Vinicius Gomes"
-                                            className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-4 py-2.5 outline-none focus:border-amber-500 transition"
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest px-1">Data de Contratação</label>
-                                        <input
-                                            type="date"
-                                            value={novaContratacao}
-                                            onChange={(e) => setNovaContratacao(e.target.value)}
-                                            className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-4 py-2.5 outline-none focus:border-amber-500 transition"
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest px-1">Jornada e Perfil</label>
-                                        <div className="flex gap-2">
-                                            <select
-                                                value={novaJornada}
-                                                onChange={(e) => setNovaJornada(Number(e.target.value))}
-                                                className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-3 py-2.5 flex-1 outline-none focus:border-amber-500 transition"
+                            {/* Cadastro Colapsável */}
+                            <div className="mb-10">
+                                {!isCadastroOpen ? (
+                                    <button
+                                        onClick={() => setIsCadastroOpen(true)}
+                                        className="group inline-flex items-center gap-3 rounded-2xl border border-neutral-200 bg-white px-5 py-3 shadow-sm transition hover:border-amber-300 hover:bg-amber-50/60 hover:shadow-md"
+                                    >
+                                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600 transition group-hover:scale-105">
+                                            <UserPlus size={20} />
+                                        </span>
+                                        <span className="text-left">
+                                            <span className="block text-sm font-bold text-neutral-800">Cadastrar Novo Integrante</span>
+                                            <span className="block text-xs text-neutral-500">Abra o formulário completo quando precisar</span>
+                                        </span>
+                                    </button>
+                                ) : (
+                                    <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 shadow-xl relative overflow-hidden transition-all duration-300">
+                                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                                            <UserCheck size={80} className="text-white" />
+                                        </div>
+                                        <div className="flex items-center justify-between mb-6">
+                                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                                <UserCheck size={20} className="text-amber-400" />
+                                                Cadastrar Novo Integrante
+                                            </h3>
+                                            <button
+                                                onClick={() => setIsCadastroOpen(false)}
+                                                className="inline-flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition hover:bg-neutral-700"
                                             >
-                                                <option value={4}>4h/dia</option>
-                                                <option value={6}>6h/dia</option>
-                                                <option value={8}>8h/dia</option>
-                                            </select>
-                                            <select
-                                                value={novoPerfil}
-                                                onChange={(e) => setNovoPerfil(e.target.value as any)}
-                                                className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-3 py-2.5 flex-1 outline-none focus:border-amber-500 transition"
+                                                <X size={14} /> Fechar
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest px-1">Nome de Usuário (Windows)</label>
+                                                <input
+                                                    type="text"
+                                                    value={novoNome}
+                                                    onChange={(e) => setNovoNome(e.target.value)}
+                                                    placeholder="Ex: Vinicius Gomes"
+                                                    className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-4 py-2.5 outline-none focus:border-amber-500 transition"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest px-1">Data de Contratação</label>
+                                                <input
+                                                    type="date"
+                                                    value={novaContratacao}
+                                                    onChange={(e) => setNovaContratacao(e.target.value)}
+                                                    className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-4 py-2.5 outline-none focus:border-amber-500 transition"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest px-1">Jornada e Perfil</label>
+                                                <div className="flex gap-2">
+                                                    <select
+                                                        value={novaJornada}
+                                                        onChange={(e) => setNovaJornada(Number(e.target.value))}
+                                                        className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-3 py-2.5 flex-1 outline-none focus:border-amber-500 transition"
+                                                    >
+                                                        <option value={4}>4h/dia</option>
+                                                        <option value={6}>6h/dia</option>
+                                                        <option value={8}>8h/dia</option>
+                                                    </select>
+                                                    <select
+                                                        value={novoPerfil}
+                                                        onChange={(e) => setNovoPerfil(e.target.value as any)}
+                                                        className="bg-neutral-800 border border-neutral-700 text-white rounded-xl px-3 py-2.5 flex-1 outline-none focus:border-amber-500 transition"
+                                                    >
+                                                        <option value="ESTAGIARIO">Comum</option>
+                                                        <option value="GESTOR">Gestor</option>
+                                                        <option value="ESTAGIARIO_GESTOR">E. Gestor</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-6 flex items-center gap-3">
+                                            <button
+                                                onClick={handleCadastrar}
+                                                className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-neutral-900 font-bold rounded-xl transition shadow-lg shadow-amber-500/20 active:scale-[0.98]"
                                             >
-                                                <option value="ESTAGIARIO">Comum</option>
-                                                <option value="GESTOR">Gestor</option>
-                                                <option value="ESTAGIARIO_GESTOR">E. Gestor</option>
-                                            </select>
+                                                Confirmar Cadastro
+                                            </button>
+                                            <button
+                                                onClick={() => setIsCadastroOpen(false)}
+                                                className="py-3 px-4 rounded-xl border border-neutral-700 text-neutral-200 text-sm font-semibold hover:bg-neutral-800 transition"
+                                            >
+                                                Cancelar
+                                            </button>
                                         </div>
                                     </div>
-                                </div>
-                                <button
-                                    onClick={handleCadastrar}
-                                    className="mt-6 w-full py-3 bg-amber-500 hover:bg-amber-400 text-neutral-900 font-bold rounded-xl transition shadow-lg shadow-amber-500/20 active:scale-[0.98]"
-                                >
-                                    Confirmar Cadastro
-                                </button>
+                                )}
                             </div>
 
                             <h3 className="text-xl font-semibold text-neutral-800 mb-6 flex items-center gap-2">Gerir Pessoas e Jornadas</h3>
@@ -576,8 +610,8 @@ export default function AdminPage() {
                                     <thead className="bg-neutral-50 text-neutral-500 font-semibold border-b border-neutral-100">
                                         <tr>
                                             <th className="p-4 uppercase tracking-wider text-xs">Nome</th>
-                                            <th className="p-4 uppercase tracking-wider text-xs">Jornada Diária</th>
-                                            <th className="p-4 uppercase tracking-wider text-xs text-right">Ações</th>
+                                            <th className="p-4 uppercase tracking-wider text-xs">Jornada DiÃ¡ria</th>
+                                            <th className="p-4 uppercase tracking-wider text-xs text-right">AÃ§Ãµes</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -593,7 +627,7 @@ export default function AdminPage() {
                                                         <span className="hover:text-blue-600 transition cursor-pointer" onClick={() => router.push(`/resumo?user=${encodeURIComponent(est.nome_usuario)}`)}>
                                                             {est.nome_usuario}
                                                         </span>
-                                                        {isFeriando && <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border border-purple-200">Em Férias</span>}
+                                                        {isFeriando && <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border border-purple-200">Em FÃ©rias</span>}
                                                         {est.status === 'REMOVIDO' && <span className="ml-2 text-[10px] bg-neutral-200 text-neutral-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Bloqueado</span>}
                                                     </td>
                                                     <td className="p-4">
@@ -630,7 +664,7 @@ export default function AdminPage() {
                                                                     disabled={!canVacation}
                                                                     className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition ${canVacation ? 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100' : 'bg-neutral-50 text-neutral-400 border-neutral-100 cursor-not-allowed hidden'}`}
                                                                 >
-                                                                    Dar Férias
+                                                                    Dar FÃ©rias
                                                                 </button>
                                                                 <button onClick={() => handleRemover(est.nome_usuario)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 transition">Bloquear</button>
                                                             </div>
