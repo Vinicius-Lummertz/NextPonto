@@ -24,6 +24,24 @@ export default function PontoEletronico() {
     const [tipoPerfil, setTipoPerfil] = useState<'ESTAGIARIO' | 'GESTOR' | 'ESTAGIARIO_GESTOR'>('ESTAGIARIO');
     const [loading, setLoading] = useState(true);
 
+    const calcWorkedMsNoLunchDiscount = (ponto: Ponto, isToday: boolean) => {
+        if (!ponto.entrada) return 0;
+
+        const tIn = new Date(ponto.entrada).getTime();
+        const latestRegisteredMark = Math.max(
+            tIn,
+            ponto.almoco_saida ? new Date(ponto.almoco_saida).getTime() : tIn,
+            ponto.almoco_retorno ? new Date(ponto.almoco_retorno).getTime() : tIn,
+            ponto.saida_final ? new Date(ponto.saida_final).getTime() : tIn
+        );
+
+        const tOut = ponto.saida_final
+            ? new Date(ponto.saida_final).getTime()
+            : (isToday ? new Date().getTime() : latestRegisteredMark);
+
+        return Math.max(0, tOut - tIn);
+    };
+
     // 1. Inicializa: Tauri -> Nome -> Tauri SQL
     useEffect(() => {
         async function loadData() {
@@ -145,28 +163,14 @@ export default function PontoEletronico() {
     // 3. Cálculo de horas úteis (Carga 8h diária)
     const calcularSaldo = () => {
         let horasDia = 0;
+        const todayStr = new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
         historicoMes.forEach(p => {
-            if (!p.entrada) return;
-            const tIn = new Date(p.entrada).getTime();
-            let tempoUtil = 0;
-
-            if (p.almoco_saida) { // Fez primeira perna (Entrada->Almoço)
-                tempoUtil += new Date(p.almoco_saida).getTime() - tIn;
-                if (p.almoco_retorno) { // Fez segunda perna (Retorno->Saída)
-                    const tRetorno = new Date(p.almoco_retorno).getTime();
-                    const tOut = p.saida_final ? new Date(p.saida_final).getTime() : new Date().getTime();
-                    tempoUtil += tOut - tRetorno;
-                }
-            } else { // Não saiu pro almoço ainda (Entrada -> Agora)
-                const tOut = p.saida_final ? new Date(p.saida_final).getTime() : new Date().getTime();
-                tempoUtil += tOut - tIn;
-            }
-            horasDia += tempoUtil / 3600000;
+            const isToday = p.data.toString().startsWith(todayStr);
+            horasDia += calcWorkedMsNoLunchDiscount(p, isToday) / 3600000;
         });
 
         // Se a pessoa estiver trabalhando hoje e a contagem for dinâmica:
-        const todayStr = new Date().toISOString().split('T')[0];
         // Conta a quantidade de dias do histórico (isso seria na semana? O App todo tava calculando histórico geral. Vamos ignorar hoje na expectativa:
         const isTodayInHistory = historicoMes.some(p => new Date(p.data).toISOString().split('T')[0] === todayStr);
         const pastDaysCnt = isTodayInHistory ? historicoMes.length - 1 : historicoMes.length;
@@ -208,24 +212,8 @@ export default function PontoEletronico() {
 
     // Calculate specifically today's worked hours to show below the history
     const calcularHorasHoje = () => {
-        if (!pontoHoje || !pontoHoje.entrada) return 0;
-
-        const tIn = new Date(pontoHoje.entrada).getTime();
-        let tempoUtil = 0;
-
-        if (pontoHoje.almoco_saida) {
-            tempoUtil += new Date(pontoHoje.almoco_saida).getTime() - tIn;
-            if (pontoHoje.almoco_retorno) {
-                const tRetorno = new Date(pontoHoje.almoco_retorno).getTime();
-                const tOut = pontoHoje.saida_final ? new Date(pontoHoje.saida_final).getTime() : new Date().getTime();
-                tempoUtil += tOut - tRetorno;
-            }
-        } else {
-            const tOut = pontoHoje.saida_final ? new Date(pontoHoje.saida_final).getTime() : new Date().getTime();
-            tempoUtil += tOut - tIn;
-        }
-
-        return tempoUtil / 3600000;
+        if (!pontoHoje) return 0;
+        return calcWorkedMsNoLunchDiscount(pontoHoje, true) / 3600000;
     };
     const horasHoje = calcularHorasHoje();
 
@@ -248,7 +236,6 @@ export default function PontoEletronico() {
                             onClick={registrar}
                             className={`peer cursor-pointer w-64 h-64 rounded-full flex items-center justify-center text-white transition-all transform hover:scale-105 active:scale-95 shadow-xl ${proximoPonto === 'Turno Concluído' ? 'bg-neutral-300 pointer-events-none' : btnCor}`}
                         >
-                            <div className="absolute inset-2 border-4 border-white/20 rounded-full pointer-events-none"></div>
                             <span className="cursor-pointer text-3xl font-bold tracking-tight px-4 leading-tight whitespace-pre-line text-center">
                                 {loading ? 'Aguarde...' : (proximoPonto === 'Turno Concluído' ? 'Até amanhã!' : `Registrar\n${proximoPonto}`)}
                             </span>

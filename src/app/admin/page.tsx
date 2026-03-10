@@ -222,6 +222,23 @@ export default function AdminPage() {
         const year = currentDate.getFullYear();
         const monthIndex = currentDate.getMonth();
         const daysInMonthCalculated = new Date(year, monthIndex + 1, 0).getDate();
+        const calcWorkedMsNoLunchDiscount = (record: Ponto, isToday: boolean) => {
+            if (!record.entrada) return 0;
+
+            const tIn = new Date(record.entrada).getTime();
+            const latestRegisteredMark = Math.max(
+                tIn,
+                record.almoco_saida ? new Date(record.almoco_saida).getTime() : tIn,
+                record.almoco_retorno ? new Date(record.almoco_retorno).getTime() : tIn,
+                record.saida_final ? new Date(record.saida_final).getTime() : tIn
+            );
+
+            const tOut = record.saida_final
+                ? new Date(record.saida_final).getTime()
+                : (isToday ? new Date().getTime() : latestRegisteredMark);
+
+            return Math.max(0, tOut - tIn);
+        };
 
         const validDays: string[] = []; // Dias Ãºteis atÃ© hoje
         for (let day = 1; day <= daysInMonthCalculated; day++) {
@@ -265,24 +282,13 @@ export default function AdminPage() {
                 }
 
                 if (record && record.entrada) {
-                    const tIn = new Date(record.entrada).getTime();
-                    if (record.almoco_saida) {
+                    totalWorkedMs += calcWorkedMsNoLunchDiscount(record, isToday);
+
+                    if (record.almoco_saida && record.almoco_retorno) {
                         const lOut = new Date(record.almoco_saida).getTime();
-                        totalWorkedMs += (lOut - tIn);
-
-                        if (record.almoco_retorno) {
-                            const lIn = new Date(record.almoco_retorno).getTime();
-                            totalLunchMs += (lIn - lOut);
-                            numLunches++;
-
-                            const tOut = record.saida_final ? new Date(record.saida_final).getTime() : new Date().getTime();
-                            if (isToday || record.saida_final) {
-                                totalWorkedMs += (tOut - lIn);
-                            }
-                        }
-                    } else {
-                        const tOut = record.saida_final ? new Date(record.saida_final).getTime() : (isToday ? new Date().getTime() : tIn);
-                        totalWorkedMs += (tOut - tIn);
+                        const lIn = new Date(record.almoco_retorno).getTime();
+                        totalLunchMs += (lIn - lOut);
+                        numLunches++;
                     }
                 } else if (isPast && !record && est.status !== 'FERIAS' && !isBeforeHire && !isVacation) {
                     faltasCont++;

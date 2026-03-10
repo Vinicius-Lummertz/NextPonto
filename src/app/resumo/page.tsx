@@ -136,11 +136,30 @@ export default function ResumoMensal() {
 
     const todayDateStr = new Date().toISOString().split('T')[0];
 
+    const calcWorkedMsNoLunchDiscount = (record: Ponto, isToday: boolean) => {
+        if (!record.entrada) return 0;
+
+        const tIn = new Date(record.entrada).getTime();
+        const latestRegisteredMark = Math.max(
+            tIn,
+            record.almoco_saida ? new Date(record.almoco_saida).getTime() : tIn,
+            record.almoco_retorno ? new Date(record.almoco_retorno).getTime() : tIn,
+            record.saida_final ? new Date(record.saida_final).getTime() : tIn
+        );
+
+        const tOut = record.saida_final
+            ? new Date(record.saida_final).getTime()
+            : (isToday ? new Date().getTime() : latestRegisteredMark);
+
+        return Math.max(0, tOut - tIn);
+    };
+
     // Cálculos de KPIs
     let totalWorkedMs = 0;
     let totalLunchMs = 0;
     let lunchCount = 0;
     let faltasCount = 0;
+    let expectedWorkedMs = 0;
 
     const weeks: { weekTitle: string; worked: number; expected: number; }[] = [];
     let currentWeekWorked = 0;
@@ -173,29 +192,19 @@ export default function ResumoMensal() {
             }
 
             if (record && record.entrada) {
-                const tIn = new Date(record.entrada).getTime();
-                if (record.almoco_saida) {
+                dayWorkedMs += calcWorkedMsNoLunchDiscount(record, isToday);
+
+                if (record.almoco_saida && record.almoco_retorno) {
                     const lOut = new Date(record.almoco_saida).getTime();
-                    dayWorkedMs += (lOut - tIn);
-
-                    if (record.almoco_retorno) {
-                        const lIn = new Date(record.almoco_retorno).getTime();
-                        totalLunchMs += (lIn - lOut);
-                        lunchCount++;
-
-                        const tOut = record.saida_final ? new Date(record.saida_final).getTime() : new Date().getTime();
-                        if (isToday || record.saida_final) {
-                            dayWorkedMs += (tOut - lIn);
-                        }
-                    }
-                } else {
-                    const tOut = record.saida_final ? new Date(record.saida_final).getTime() : (isToday ? new Date().getTime() : tIn);
-                    dayWorkedMs += (tOut - tIn);
+                    const lIn = new Date(record.almoco_retorno).getTime();
+                    totalLunchMs += (lIn - lOut);
+                    lunchCount++;
                 }
             } else if (isPast && !record && !isBeforeHireDate && !isVacation) {
                 faltasCount++;
             }
 
+            expectedWorkedMs += dayExpectedMs;
             totalWorkedMs += dayWorkedMs;
             currentWeekWorked += dayWorkedMs;
             currentWeekExpected += dayExpectedMs;
@@ -233,6 +242,19 @@ export default function ResumoMensal() {
 
     const totalHoursStr = formatHorasText(totalWorkedMs);
     const avgLunchMins = lunchCount > 0 ? Math.floor((totalLunchMs / lunchCount) / 60000) : 0;
+    const targetLunchMins = 30;
+    const hoursComparatorMs = totalWorkedMs - expectedWorkedMs;
+    const lunchComparatorMins = avgLunchMins - targetLunchMins;
+    const hoursComparatorPercent = expectedWorkedMs > 0 ? (hoursComparatorMs / expectedWorkedMs) * 100 : 0;
+    const lunchComparatorPercent = targetLunchMins > 0 ? (lunchComparatorMins / targetLunchMins) * 100 : 0;
+
+    const formatComparator = (value: number, unit: 'hours' | 'minutes', percent: number) => {
+        const isPositive = value >= 0;
+        const signedValue = unit === 'hours'
+            ? formatHorasText(Math.abs(value), false)
+            : `${Math.abs(value).toFixed(0)} min`;
+        return `${isPositive ? '+' : '-'}${signedValue} (${isPositive ? '+' : ''}${percent.toFixed(1)}%)`;
+    };
 
     const handleFileOpen = async () => {
         try {
@@ -332,11 +354,17 @@ export default function ResumoMensal() {
                             <div className="absolute -right-4 -top-4 w-24 h-24 bg-zinc-800 rounded-full blur-2xl opacity-50"></div>
                             <h3 className="text-zinc-400 font-medium text-sm mb-1">Horas Trabalhadas no Mês</h3>
                             <p className="text-4xl font-light">{totalHoursStr}</p>
+                            <p className={`mt-2 text-xs font-medium ${hoursComparatorMs >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {formatComparator(hoursComparatorMs, 'hours', hoursComparatorPercent)}
+                            </p>
                         </div>
                         <div className="bg-zinc-900 rounded-2xl p-6 text-white shadow-lg overflow-hidden relative">
                             <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-900/40 rounded-full blur-2xl"></div>
                             <h3 className="text-zinc-400 font-medium text-sm mb-1">Tempo Médio de Almoço</h3>
                             <p className="text-4xl font-light">{avgLunchMins}<span className="text-lg text-zinc-500 font-medium ml-1">min</span></p>
+                            <p className={`mt-2 text-xs font-medium ${lunchComparatorMins >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {formatComparator(lunchComparatorMins, 'minutes', lunchComparatorPercent)}
+                            </p>
                         </div>
                         <div className="bg-zinc-900 rounded-2xl p-6 text-white shadow-lg overflow-hidden relative">
                             <div className="absolute -right-4 -top-4 w-24 h-24 bg-rose-900/40 rounded-full blur-2xl"></div>
