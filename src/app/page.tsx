@@ -23,6 +23,7 @@ export default function PontoEletronico() {
     const [proximoPonto, setProximoPonto] = useState('Entrada');
     const [tipoPerfil, setTipoPerfil] = useState<'ESTAGIARIO' | 'GESTOR' | 'ESTAGIARIO_GESTOR'>('ESTAGIARIO');
     const [loading, setLoading] = useState(true);
+    const [showSplash, setShowSplash] = useState(true);
 
     const calcWorkedMsNoLunchDiscount = (ponto: Ponto, isToday: boolean) => {
         if (!ponto.entrada) return 0;
@@ -99,6 +100,11 @@ export default function PontoEletronico() {
             } finally { setLoading(false); }
         }
         loadData();
+    }, []);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setShowSplash(false), 1000);
+        return () => clearTimeout(timer);
     }, []);
 
     // 2. Acionar Registro
@@ -216,6 +222,17 @@ export default function PontoEletronico() {
         return calcWorkedMsNoLunchDiscount(pontoHoje, true) / 3600000;
     };
     const horasHoje = calcularHorasHoje();
+
+    if (showSplash) {
+        return (
+            <div className="np-page np-home-page min-h-screen flex items-center justify-center p-6">
+                <div className="flex flex-col items-center gap-4 rounded-3xl bg-white/90 px-10 py-8 shadow-xl border border-neutral-200 dark:bg-slate-900/80 dark:border-slate-700">
+                    <img src="/bateponto-logo.png" alt="BatePonto" width={96} height={96} className="h-24 w-24 object-contain animate-pulse" />
+                    <span className="text-sm text-neutral-600 dark:text-slate-300">Carregando...</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="np-page np-home-page min-h-screen bg-neutral-100 flex items-center justify-center p-6 font-sans">

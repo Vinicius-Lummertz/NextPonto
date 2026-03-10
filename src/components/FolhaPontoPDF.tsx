@@ -159,7 +159,7 @@ const FERIADOS_NACIONAIS = [
     '12-25', // Natal
 ];
 
-const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, turno, mes, ano, historico, monthIndex, dataInicioFerias }: FolhaPontoPDFProps) => {
+const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, mes, ano, historico, monthIndex, dataInicioFerias }: FolhaPontoPDFProps) => {
 
     // Calcular dias do mês
     const daysInMonth = new Date(ano, monthIndex + 1, 0).getDate();
@@ -172,6 +172,35 @@ const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, turno, mes, ano
         if (!isoString) return '-';
         return new Date(isoString).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     };
+
+    const inferHorarioEstagio = () => {
+        const validRecords = historico.filter(p => p.entrada && (p.saida_final || p.almoco_saida));
+        if (validRecords.length === 0) return '11h-17h';
+
+        const toMinutes = (iso: string) => {
+            const date = new Date(iso);
+            return (date.getHours() * 60) + date.getMinutes();
+        };
+
+        let totalStart = 0;
+        let totalEnd = 0;
+
+        validRecords.forEach(record => {
+            const startIso = record.entrada!;
+            const endIso = record.saida_final || record.almoco_saida!;
+            totalStart += toMinutes(startIso);
+            totalEnd += toMinutes(endIso);
+        });
+
+        const avgStart = totalStart / validRecords.length;
+        const avgEnd = totalEnd / validRecords.length;
+
+        const morningDistance = Math.abs(avgStart - (8 * 60)) + Math.abs(avgEnd - (14 * 60));
+        const afternoonDistance = Math.abs(avgStart - (11 * 60)) + Math.abs(avgEnd - (17 * 60));
+
+        return morningDistance <= afternoonDistance ? '08h-14h' : '11h-17h';
+    };
+    const horarioEstagio = inferHorarioEstagio();
 
     for (let day = 1; day <= daysInMonth; day++) {
         const loopDate = new Date(ano, monthIndex, day);
@@ -238,7 +267,7 @@ const FolhaPontoPDF = ({ estagiario, localTrabalho, responsavel, turno, mes, ano
                     <View style={styles.headerRowLast}>
                         <View style={{ flexDirection: 'row', width: '60%', borderRight: '1px solid #000' }}>
                             <Text style={{ width: '58.33%', backgroundColor: '#fff', borderRight: '1px solid #000', padding: 4, fontWeight: 'bold', fontSize: 11 }}>HORÁRIO DE ESTÁGIO</Text>
-                            <Text style={{ width: '41.67%', padding: 4, textAlign: 'center', fontSize: 11 }}>{turno === 'MANHÃ' ? '08h-14h' : '11h-17h'}</Text>
+                            <Text style={{ width: '41.67%', padding: 4, textAlign: 'center', fontSize: 11 }}>{horarioEstagio}</Text>
                         </View>
                         <View style={{ flexDirection: 'row', width: '40%' }}>
                             <Text style={{ width: '50%', backgroundColor: '#fff', borderRight: '1px solid #000', padding: 4, fontWeight: 'bold', fontSize: 11, textAlign: 'center' }}>MÊS</Text>

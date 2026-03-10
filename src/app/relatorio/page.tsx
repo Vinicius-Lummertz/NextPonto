@@ -62,7 +62,7 @@ export default function RelatorioPDF() {
 
                 const month = currentDate.getMonth() + 1;
                 const year = currentDate.getFullYear();
-
+                
                 const [data, estRow] = await Promise.all([
                     db.select<Ponto[]>(
                         `SELECT * FROM Ponto WHERE username = ? AND MONTH(data) = ? AND YEAR(data) = ?`,

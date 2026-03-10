@@ -12,23 +12,31 @@ function applyTheme(theme: Theme) {
 }
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return 'light';
-    const stored = localStorage.getItem(THEME_KEY) as Theme | null;
-    if (stored) return stored;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  const [theme, setTheme] = useState<Theme>('light');
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    const stored = localStorage.getItem(THEME_KEY) as Theme | null;
+    const resolvedTheme =
+      stored ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+    setTheme(resolvedTheme);
+    applyTheme(resolvedTheme);
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     applyTheme(theme);
-  }, [theme]);
+    localStorage.setItem(THEME_KEY, theme);
+  }, [mounted, theme]);
 
   const toggleTheme = () => {
     const nextTheme: Theme = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
-    applyTheme(nextTheme);
-    localStorage.setItem(THEME_KEY, nextTheme);
   };
+
+  if (!mounted) return null;
 
   return (
     <button
